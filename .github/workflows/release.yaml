@@ -41,4 +41,4 @@ jobs:
           context: .
           # testing for now..
           push: false
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ${{ env.REGISTRY }}/maastrichtu-cds/v6-coxph:latest
