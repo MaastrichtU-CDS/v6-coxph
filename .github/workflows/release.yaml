@@ -1,27 +1,44 @@
-name: Create Release
+name: Create and publish a Docker image
 
 on:
   push:
     branches:
       - main
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
-    create-docker-image:
-        runs-on: ubuntu-latest
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-        steps:
-        - name: Checkout Repository
-          uses: actions/checkout@v4
+      - name: Log in to the Container registry
+        # https://github.com/docker/login-action/commits/v3/
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-        - name: Login to Docker registry
-          uses: docker/login-action@v3
-          with:
-            username: ${{ secrets.DOCKER_USER }}
-            password: ${{ secrets.DOCKER_PASSWORD }}
+      # - name: Extract metadata (tags, labels) for Docker
+      #   id: meta
+      #   # https://github.com/docker/metadata-action/commits/v5/
+      #   uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+      #   with:
+      #     images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-        - name: Run Makefile Rule
-          run: docker build -t v6-coxph .
-
-        - name: Push Docker image
-          run: |
-            docker push v6-coxph
+      - name: Build and push Docker image
+        # https://github.com/docker/build-push-action/commits/v5/
+        uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56
+        with:
+          context: .
+          # testing for now..
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
