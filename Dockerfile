@@ -6,7 +6,7 @@ FROM harbor2.vantage6.ai/infrastructure/algorithm-base
 ARG PKG_NAME="coxph"
 
 # install federated algorithm
-COPY coxph /app
+COPY . /app
 RUN pip install /app
 
 
