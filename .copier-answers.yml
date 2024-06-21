@@ -1,0 +1,38 @@
+# DO NOT MODIFY THIS FILE MANUALLY.
+# This file contains the answers to the questions asked by the
+# v6-algorithm-template-creator (using the Copier package). The answers will
+# be updated if you re-run the template creator. Also, the answers in this file
+# may be used to submit your algorithm to a vantage6 algorithm store.
+_commit: 4.3.4
+_src_path: gh:vantage6/v6-algorithm-template.git
+advanced: true
+algorithm_description: Federated algorithm for baseline hazard curve in Vantage6 v4
+algorithm_name: coxph
+author: VG
+central_args:
+- time_col
+- outcome_col
+- expl_vars
+- organization_ids
+central_function_client: true
+central_function_data: false
+central_function_name: central
+copyright: ''
+docker_image: v6-coxph
+has_central_function: true
+has_docs: true
+has_gh_pipeline: true
+has_partial_function: true
+open_source_license: apache
+partial_args:
+- time_col
+- outcome_col
+- expl_vars
+- organization_ids
+partial_function_client: true
+partial_function_data: true
+partial_function_name: get_unique_event_times
+partial_function_number_databases: 2
+private_registry: false
+project_name: coxph
+use_vpn: false

@@ -1,0 +1,71 @@
+{
+  "name": "coxph",
+  "image": "v6-coxph",
+  "vantage6_version": "4.3",
+  "partitioning": "horizontal",
+  "functions": [
+    {
+      "name": "central",
+      "description": "Federated algorithm for baseline hazard curve in Vantage6 v4",
+      "type": "central",
+      "databases": [],
+      "arguments": [
+        {
+          "name": "time_col",
+          "type": "",
+          "description": ""
+        },
+        {
+          "name": "outcome_col",
+          "type": "",
+          "description": ""
+        },
+        {
+          "name": "expl_var",
+          "type": "",
+          "description": ""
+        },
+        {
+          "name": "organization_ids",
+          "type": "",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "get_unique_event_times",
+      "description": "",
+      "type": "federated",
+      "databases": [
+        {
+          "name": "Database 1"
+        },
+        {
+          "name": "Database 2"
+        }
+      ],
+      "arguments": [
+        {
+          "name": "time_col",
+          "type": "",
+          "description": ""
+        },
+        {
+          "name": "outcome_col",
+          "type": "",
+          "description": ""
+        },
+        {
+          "name": "expl_var",
+          "type": "",
+          "description": ""
+        },
+        {
+          "name": "organization_ids",
+          "type": "",
+          "description": ""
+        }
+      ]
+    }
+  ]
+}
