@@ -5,24 +5,21 @@ that the central method is executed on a node, just like any other method.
 The results in a return statement are sent to the vantage6 server (after
 encryption if that is enabled).
 """
-import time
-import numpy as np
-import json
-from scipy.stats import norm
-import pandas as pd
 import math
-from scipy.linalg import solve
-from scipy.stats import iqr
 
-from vantage6.algorithm.tools.util import info, warn, error
+import numpy as np
+import pandas as pd
+
+from scipy.stats import norm
+from scipy.linalg import solve
+from vantage6.algorithm.tools.util import info
 from vantage6.algorithm.tools.decorators import algorithm_client
 from vantage6.algorithm.client import AlgorithmClient
 
 
 @algorithm_client
 def central(
-        client: AlgorithmClient, time_col, outcome_col, expl_vars, organization_ids,
-        baseline_hr=False, binning=0, differential_privacy=False):
+        client: AlgorithmClient, time_col, outcome_col, expl_vars, organization_ids):
     """
     This function is the central part of the algorithm. It performs the main computation and coordination tasks.
 

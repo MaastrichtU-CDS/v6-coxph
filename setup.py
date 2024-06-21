@@ -21,6 +21,11 @@ setup(
     python_requires='>=3.10',
     install_requires=[
         'vantage6-algorithm-tools',
-        'pandas'
+        'numpy',
+        'pandas',
+        'scikit-learn',
+        'requests',
+        'scipy',
+        'scikit-survival'
     ]
 )
