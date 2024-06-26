@@ -5,24 +5,21 @@ that the central method is executed on a node, just like any other method.
 The results in a return statement are sent to the vantage6 server (after
 encryption if that is enabled).
 """
-import time
-import numpy as np
-import json
-from scipy.stats import norm
-import pandas as pd
 import math
-from scipy.linalg import solve
-from scipy.stats import iqr
 
-from vantage6.algorithm.tools.util import info, warn, error
+import numpy as np
+import pandas as pd
+
+from scipy.stats import norm
+from scipy.linalg import solve
+from vantage6.algorithm.tools.util import info
 from vantage6.algorithm.tools.decorators import algorithm_client
 from vantage6.algorithm.client import AlgorithmClient
 
 
 @algorithm_client
 def central(
-        client: AlgorithmClient, time_col, outcome_col, expl_vars, organization_ids,
-        baseline_hr=False, binning=0, differential_privacy=False):
+        client: AlgorithmClient, time_col, outcome_col, expl_vars, organization_ids):
     """
     This function is the central part of the algorithm. It performs the main computation and coordination tasks.
 
@@ -194,7 +191,44 @@ def central(
     results["p-value"] = pvalues
     results = results.set_index("Var")
 
-    return results.to_dict()
+    # Compute the baseline hazard function
+    baseline_hazard = compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1)
+
+    return baseline_hazard.to_dict(), results.to_dict()
+
+
+def compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1):
+    """
+    This function computes the baseline hazard for each unique event time.
+
+    Parameters:
+    time_col (str): The name of the column in the DataFrame that contains the time data.
+    aggregated_time_events (pandas.DataFrame): The DataFrame containing the frequency of unique event times.
+    unique_time_events (list): A list of unique event times.
+    summed_agg1 (numpy.ndarray): The aggregated sum of the first set of values.
+
+    Returns:
+    pandas.DataFrame: A DataFrame containing the baseline hazard for each unique event time.
+    """
+
+    # Initialize an empty list to store the baseline hazard for each unique event time
+    baseline_hazard = []
+
+    # Iterate over each unique event time
+    for t in range(len(unique_time_events)):
+        # Compute the baseline hazard at each unique event time
+        h0_t = 1 / summed_agg1[t]
+        # TODO Uncomment this line to compute cumulative hazard
+        #h0_t = aggregated_time_events.loc[aggregated_time_events[time_col] == unique_time_events[t], 'freq'].values[0] / \
+        #       summed_agg1[t]
+        # Append the computed baseline hazard to the list
+        baseline_hazard.append({'time': unique_time_events[t], 'hazard': h0_t})
+
+    # Convert the list of baseline hazards into a DataFrame
+    baseline_hazard_df = pd.DataFrame(baseline_hazard)
+
+    # Return the DataFrame containing the baseline hazard for each unique event time
+    return baseline_hazard_df
 
 
 def compute_derivatives(summed_agg1, summed_agg2, summed_agg3, aggregated_time_events, z_sum):
