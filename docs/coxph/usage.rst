@@ -3,19 +3,21 @@ How to use
 
 Input arguments
 ---------------
+The input arguments for the central function consist of:
 
-.. describe the input arguments:
-.. ['time_col', 'outcome_col', 'expl_var', 'organization_ids']
+- time_col (string): The name of the column in the dataset that contains the time data.
+- outcome_col (string): The name of the column in the dataset that contains the outcome data.
+- expl_vars (list): A list of explanatory variables (i.e. predictors) to be used in the computation.
+- organization_ids (list): A list of organization IDs that participate in the collaboration and you wish to run the algorithm on.
 
 Python client example
 ---------------------
 
 To understand the information below, you should be familiar with the vantage6
-framework. If you are not, please read the `documentation <https://docs.vantage6.ai>`_
+framework.
+If you are not, please read the `documentation <https://docs.vantage6.ai>`_
 first, especially the part about the
 `Python client <https://docs.vantage6.ai/en/main/user/pyclient.html>`_.
-
-.. TODO Some explanation of the code below
 
 .. code-block:: python
 
@@ -25,7 +27,7 @@ first, especially the part about the
   port = 5000
   api_path = '/api'
   private_key = None
-  username = 'root'
+  username = 'org_1-admin'
   password = 'password'
 
   # Create connection with the vantage6 server
@@ -33,15 +35,17 @@ first, especially the part about the
   client.setup_encryption(private_key)
   client.authenticate(username, password)
 
+  # When set to None it will run the algorithm on all organizations in the specified collaboration
+  organization_ids = None
+
   input_ = {
-    'master': True,
     'method': 'central',
-    'args': [],
+    'master': True,
     'kwargs': {
-        'time_col': 'my_value',
-        'outcome_col': 'my_value',
-        'expl_var': 'my_value',
-        'organization_ids': 'my_value',
+        'time_col': 'overall_survival_in_days',
+        'outcome_col': 'event_overall_survival',
+        'expl_vars': ['clin_n_1', 'index_tumour_location_oropharynx'],
+        'organization_ids': organization_ids,
     },
     'output_format': 'json'
   }
@@ -49,9 +53,9 @@ first, especially the part about the
   my_task = client.task.create(
       collaboration=1,
       organizations=[1],
-      name='coxph',
-      description='Federated algorithm for baseline hazard curve in Vantage6 v4',
-      image='v6-coxph',
+      name='Cox proportional hazards',
+      description='Cox proportional hazards model',
+      image='ghcr.io/maastrichtu-cds/v6-coxph:latest',
       input=input_,
       data_format='json'
   )
