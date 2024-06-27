@@ -12,7 +12,7 @@ import pandas as pd
 
 from scipy.stats import norm
 from scipy.linalg import solve
-from vantage6.algorithm.tools.util import info
+from vantage6.algorithm.tools.util import info, warn, error
 from vantage6.algorithm.tools.decorators import algorithm_client
 from vantage6.algorithm.client import AlgorithmClient
 
@@ -41,6 +41,9 @@ def central(
     else:
         ids = organization_ids
 
+    # Create a list to store the IDs of organizations that do not meet privacy guards
+    excluded_ids = []
+
     info(f'sending task to organizations {ids}')
 
     n_covs = len(expl_vars)
@@ -56,24 +59,50 @@ def central(
         },
     }
 
-    # create a subtask for all organizations in the collaboration.
-    info("Creating subtask for all organizations in the collaboration")
-    task = client.task.create(
-        input_=input_,
-        organizations=ids,
-        name="Unique event times",
-        description="Getting unique event times and their counts"
-    )
+    n_loops = 0
+    n_threshold_met = False
+    while not n_threshold_met:
+        # This list represents the organizations that will be excluded in the following loop
+        _excluded_ids = []
+        if n_loops > 2:
+            error("Sample size violations should be eliminated yet criteria are not met. Exiting")
+            raise ValueError("Sample size violations should be eliminated yet criteria are not. Exiting")
 
-    # wait for node to return results of the subtask.
-    info("Waiting for results")
-    results = client.wait_for_results(task_id=task.get("id"))
-    info("Results obtained!")
+        n_loops += 1
+        # Create a subtask for all selected organizations in the collaboration.
+        info("Creating subtask for all selected organizations in the collaboration")
+        task = client.task.create(
+            input_=input_,
+            organizations=ids,
+            name="Unique event times",
+            description="Getting unique event times and their counts"
+        )
 
-    unique_time_events = []
-    for output in results:
-        output = pd.DataFrame.from_dict(output["times"])
-        unique_time_events.append(output)
+        # Wait for the node to return results of the subtask.
+        info("Waiting for results")
+        results = client.wait_for_results(task_id=task.get("id"))
+        info("Results obtained!")
+
+        unique_time_events = []
+        for output in results:
+
+            # Exclude organizations that do not meet the N-threshold
+            if "N-Threshold not met" in output:
+                warn(f"Insufficient samples for organization {output['N-Threshold not met']}. "
+                     f"Excluding organization from analysis.")
+                ids.remove(output["N-Threshold not met"])
+                excluded_ids.append(output["N-Threshold not met"])
+                _excluded_ids.append(output["N-Threshold not met"])
+                continue
+
+            output = pd.DataFrame.from_dict(output["times"])
+            unique_time_events.append(output)
+
+        if len(_excluded_ids) == 0:
+            n_threshold_met = True
+        elif len(ids) == 0:
+            warn("No organizations meet the minimal sample size threshold, returning NaN.")
+            return {"excluded_organizations": excluded_ids, "table": np.nan}
 
     aggregated_time_events = pd.concat(unique_time_events)
     aggregated_time_events = aggregated_time_events.groupby(time_col, as_index=False).sum()
@@ -191,7 +220,7 @@ def central(
     results["p-value"] = pvalues
     results = results.set_index("Var")
 
-    return results.to_dict()
+    return {"included_organizations": ids, "excluded_organizations": excluded_ids, "model": results.to_dict()}
 
 
 def compute_derivatives(summed_agg1, summed_agg2, summed_agg3, aggregated_time_events, z_sum):

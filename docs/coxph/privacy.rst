@@ -3,7 +3,14 @@ Privacy
 
 Guards
 ------
-.. TODO check whether n is >= 11
+
+Sample size threshold
+~~~~~~~~~~~~~~~~
+The algorithm has a minimal threshold for the number of rows in the selected database. This threshold is set to 10 rows.
+If the number of rows in a given data station is below this threshold,
+the data station will not be included in the federated learning process and will be marked in the result.
+This is determined in the first partial task.
+This measure is identifiable as the 'N-threshold' in the central and partial functions.
 
 .. What have you done to protect your users' privacy? E.g. threshold on low counts,
 .. noise addition, etc.
