@@ -9,7 +9,7 @@ or directly to the user (if they requested partial results).
 import numpy as np
 import pandas as pd
 
-from vantage6.algorithm.tools.util import info
+from vantage6.algorithm.tools.util import info, warn
 from vantage6.algorithm.tools.decorators import algorithm_client
 from vantage6.algorithm.tools.decorators import data
 from vantage6.algorithm.client import AlgorithmClient
@@ -20,6 +20,7 @@ from vantage6.algorithm.client import AlgorithmClient
 def get_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, time_col, outcome_col):
     """
     This function retrieves unique event times from the provided DataFrame.
+    If the number of samples is too small, the sub-task is halted and returns the organization ID.
 
     Parameters:
     client (AlgorithmClient): The client instance used to interact with the vantage6 server.
@@ -28,9 +29,15 @@ def get_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, time_col, 
     outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
 
     Returns:
-    dict: A dictionary containing a DataFrame of unique event times.
+    dict: A dictionary containing a DataFrame of unique event times,
+    or a message indicating that the subtask was not executed for privacy reasons.
     """
     info("Computing unique event times")
+
+    if df[outcome_col].notnull().sum() <= 10:
+        warn("Sub-task was not executed because the number of samples is too small (n <= 10)")
+        return {"N-Threshold not met": client.organization_id}
+
     times = df[df[outcome_col] == 1].groupby(time_col, as_index=False).count()
     times = times.sort_values(by=time_col)[[time_col, outcome_col]]
     times['freq'] = times[outcome_col]
