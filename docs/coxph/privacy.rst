@@ -54,7 +54,7 @@ Vulnerabilities to known attacks
       - ✔
       - The model prediction can indeed be used to infer the outcome of an actual individual, but without knowing the sensitive information the adversary will not be able to assess its authenticity.
     * - Watermark Attack
-      - ✔
+      - ⚠
       - To be determined
 
 .. TODO verify whether these definitions are correct.

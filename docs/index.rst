@@ -4,17 +4,19 @@ Overview
 Description
 -----------
 
-.. Give short description of the algorithm on this main page of the docs
+This algorithm provides an implementation of the Cox Proportional Hazards model.
 
 Authors
 -------
 
-.. List authors.
+B Gottardelli
+V Gouthamchand
+J Hogenboom
 
 Source code
 -----------
 
-.. Describe where to find source code and docker files
+https://github.com/MaastrichtU-CDS/v6-coxph
 
 
 Contents
