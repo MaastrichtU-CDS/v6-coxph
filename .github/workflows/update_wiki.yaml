@@ -50,12 +50,6 @@ jobs:
 
           cd wiki
 
-          # Check for changes; if none, exit
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "No changes to the wiki."
-            exit 0
-          fi
-
           # Add, commit, and push changes
           git add .
           git commit -m "Update Wiki documentation by ${{ github.actor }}"
