@@ -27,11 +27,11 @@ jobs:
           make html
         shell: bash
 
-      - name: Convert .rst files to Markdown, including index.rst as Home.md
+      - name: Convert .rst files to Markdown, including index.rst as Home.md, with capitalized names
         run: |
           sudo apt-get install -y pandoc
           mkdir -p converted_md
-          find . -name "*.rst" -exec sh -c 'if [ "$(basename {})" = "index.rst" ]; then pandoc -f rst -t markdown -o converted_md/Home.md "{}"; else pandoc -f rst -t markdown -o converted_md/"$(basename {} .rst).md" "{}"; fi' \;
+          find . -name "*.rst" -exec sh -c 'filename=$(basename {} .rst); if [ "$filename" = "index" ]; then pandoc -f rst -t markdown -o converted_md/Home.md "{}"; else capitalized_filename="$(tr '[:lower:]' '[:upper:]' <<< ${filename:0:1})${filename:1}"; pandoc -f rst -t markdown -o converted_md/"${capitalized_filename}.md" "{}"; fi' \;
         shell: bash
 
       - name: Push Documentation to Wiki

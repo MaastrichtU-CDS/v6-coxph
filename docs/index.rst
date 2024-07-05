@@ -9,9 +9,9 @@ This algorithm provides an implementation of the Cox Proportional Hazards model.
 Authors
 -------
 
-B Gottardelli
-V Gouthamchand
-J Hogenboom
+- B. Gottardelli
+- V. Gouthamchand
+- J. Hogenboom
 
 Source code
 -----------
