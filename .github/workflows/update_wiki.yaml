@@ -27,17 +27,11 @@ jobs:
           make html
         shell: bash
 
-      - name: Convert .rst to Markdown
+      - name: Convert .rst files to Markdown, including index.rst as Home.md
         run: |
           sudo apt-get install -y pandoc
           mkdir -p converted_md
-          find docs/_build/html -name "*.rst" -exec sh -c 'pandoc -f rst -t markdown -o converted_md/"$(basename ${0%.rst}.md)" "${0}"' {} \;
-        shell: bash
-
-      - name: Convert index.rst to Markdown for Home.md
-        run: |
-          sudo apt-get install -y pandoc
-          pandoc docs/index.rst -f rst -t markdown -o converted_md/Home.md
+          find . -name "*.rst" -exec sh -c 'if [ "$(basename {})" = "index.rst" ]; then pandoc -f rst -t markdown -o converted_md/Home.md "{}"; else pandoc -f rst -t markdown -o converted_md/"$(basename {} .rst).md" "{}"; fi' \;
         shell: bash
 
       - name: Push Documentation to Wiki
