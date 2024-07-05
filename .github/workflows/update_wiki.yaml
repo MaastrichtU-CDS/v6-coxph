@@ -52,7 +52,7 @@ jobs:
           git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.wiki.git wiki
 
           # Synchronize updated or new Markdown files to the wiki, without deleting anything
-          rsync -av --update ../converted_md/ wiki/
+          rsync -av --update converted_md/ wiki/
 
           cd wiki
 
