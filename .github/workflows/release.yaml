@@ -34,3 +34,38 @@ jobs:
           context: .
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+  build-and-push-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Convert .rst files to Markdown, including index.rst as Home.md
+        run: |
+          sudo apt-get install -y pandoc
+          mkdir -p converted_md
+          find . -name "*.rst" -exec sh -c 'if [ "$(basename {})" = "index.rst" ]; then pandoc -f rst -t markdown -o converted_md/Home.md "{}"; else pandoc -f rst -t markdown -o converted_md/"$(basename {} .rst).md" "{}"; fi' \;
+        shell: bash
+
+      - name: Push Documentation to Wiki
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --global user.name "${{ github.actor }}"
+
+          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.wiki.git wiki
+
+          rsync -av converted_md/ wiki/
+
+          cd wiki
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to the wiki."
+            exit 0
+          fi
+
+          git add .
+          git commit -m "Update Wiki documentation by ${{ github.actor }}"
+          git push
+        shell: bash
