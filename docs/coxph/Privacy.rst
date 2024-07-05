@@ -32,12 +32,12 @@ Vulnerabilities to known attacks
 
 
 ✔ Reconstruction
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 **Risk analysis**:
 The amount of information shared was considered insufficient to allow reconstruction of the data underlying the model.
 
 ⚠ Differencing
-~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 **Risk analysis**:
 This is indeed possible in case a data station manager were to change the dataset after performing a task, but data station managers should not be allowed to run tasks to prevent this.
 
