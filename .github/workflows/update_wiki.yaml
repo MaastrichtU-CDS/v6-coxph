@@ -51,12 +51,17 @@ jobs:
           # Clone wiki repo using authenticated URL with environment variable
           git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.wiki.git wiki
 
-          # Clear existing files in wiki except .git and Home.md
-          cd wiki
-          find . -maxdepth 1 ! -name 'Home.md' ! -name '.git' ! -name '.' ! -name '..' -exec rm -rf {} \;
+          # Copy only updated or new Markdown files to the wiki
+          # This example uses rsync to update or add files, preserving others
+          rsync -av --ignore-existing ../converted_md/ wiki/
 
-          # Copy converted Markdown files to wiki
-          cp -r ../converted_md/* .
+          cd wiki
+
+          # Check for changes; if none, exit
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to the wiki."
+            exit 0
+          fi
 
           # Add, commit, and push changes
           git add .
