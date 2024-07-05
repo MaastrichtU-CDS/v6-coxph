@@ -1,7 +1,9 @@
 name: Test and Publish Documentation
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - feature/wiki-update
 
 jobs:
   docs-build-and-push:
