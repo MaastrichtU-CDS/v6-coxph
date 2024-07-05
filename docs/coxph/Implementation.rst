@@ -30,13 +30,13 @@ to the data that is stored on the node. The partials are executed in parallel on
 node.
 
 ``get_unique_event_times``
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 This function retrieves unique event times and their counts from the selected database.
 
 ``compute_summed_z``
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 This function computes the sum of the specified explanatory variables for the outcome events.
 
 ``perform_iteration``
-~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 This function performs an iteration of the algorithm, computing the necessary aggregates.

@@ -3,6 +3,8 @@
 
 Federated algorithm for a coxph model in Vantage6 v4
 
+Please refer to the Wiki for more information on how to use this algorithm.
+
 This algorithm is designed to be run with the [vantage6](https://vantage6.ai)
 infrastructure for distributed analysis and learning.
 
