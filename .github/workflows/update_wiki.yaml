@@ -35,12 +35,14 @@ jobs:
 
       - name: Push Documentation to Wiki
         env:
-          WIKI_GIT_URL: https://github.com/${{ github.repository }}.wiki.git
+          WIKI_GIT_URL: https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git
           DOCS_DIR: docs/_build/html
         run: |
-          # Setup git and clone wiki repo
+          # Setup git
           git config --global user.email "${{ github.actor }}@users.noreply.github.com"
           git config --global user.name "${{ github.actor }}"
+          
+          # Clone wiki repo using authenticated URL
           git clone $WIKI_GIT_URL wiki
 
           # Replace Home.md with the converted index.rst
