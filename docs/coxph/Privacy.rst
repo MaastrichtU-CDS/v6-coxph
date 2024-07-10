@@ -5,7 +5,7 @@ Guards
 ------
 
 Sample size threshold
-~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 The algorithm has a minimal threshold for the number of rows in the selected database. This threshold is set to 10 rows.
 If the number of rows in a given data station is below this threshold,
 the data station will not be included in the federated learning process and will be marked in the result.
@@ -31,34 +31,39 @@ Vulnerabilities to known attacks
 .. which attacks would be possible in your system.
 
 
-.. list-table::
-    :widths: 25 10 65
-    :header-rows: 1
+✔ Reconstruction
+~~~~~~~~~~~~~~~~
+**Risk analysis**:
+The amount of information shared was considered insufficient to allow reconstruction of the data underlying the model.
 
-    * - Attack
-      - Risk eliminated?
-      - Risk analysis
-    * - Reconstruction
-      - ✔
-      - The amount of information shared was considered insufficient to allow reconstruction of the data underlying the model.
-    * - Differencing
-      - ⚠
-      - This is indeed possible in case a data station manager were to change the dataset after performing a task, but data station managers should not be allowed to run tasks to prevent this.
-    * - Deep Leakage from Gradients (DLG)
-      - ✔
-      - This is possible in the central aggregator, but this should be a trusted party and the shared information was considered insufficient to allow for DLG.
-    * - Generative Adversarial Networks (GAN)
-      - ✔
-      - Synthetic can indeed be used to (statistically) reproduce the data that underlies the produced model, but without knowing the sensitive information the adversary will not be able to assess its authenticity.
-    * - Model Inversion
-      - ✔
-      - The model prediction can indeed be used to infer the outcome of an actual individual, but without knowing the sensitive information the adversary will not be able to assess its authenticity.
-    * - Watermark Attack
-      - ⚠
-      - To be determined
+⚠ Differencing
+~~~~~~~~~~~~~~
+**Risk analysis**:
+This is indeed possible in case a data station manager were to change the dataset after performing a task, but data station managers should not be allowed to run tasks to prevent this. Scenarios in which users try to infer sensitive data by altering the selected data are currently not possible because the algorithm does not support filtering.
+
+✔ Deep Leakage from Gradients (DLG)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**Risk analysis**:
+This is possible in the central aggregator, but this should be a trusted party and the shared information was considered insufficient to allow for DLG.
+
+✔ Generative Adversarial Networks (GAN)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**Risk analysis**:
+Synthetic data can indeed be used to (statistically) reproduce the data that underlies the produced model, but without knowing the sensitive information the adversary will not be able to assess its authenticity.
+
+✔ Model Inversion
+~~~~~~~~~~~~~~~~~
+**Risk analysis**:
+The model prediction can indeed be used to infer the outcome of an actual individual, but without knowing the sensitive information the adversary will not be able to assess its authenticity.
+
+⚠ Watermark Attack
+~~~~~~~~~~~~~~~~~~
+**Risk analysis**:
+To be determined
 
 .. TODO verify whether these definitions are correct.
-For reference:
+For reference
+-------------
 
 - Reconstruction: This attack involves an adversary trying to reconstruct the original dataset from the shared model parameters. This is a risk if the model reveals too much information about the data it was trained on.
 - Differencing: This attack involves an adversary trying to infer information about a specific data point by comparing the outputs of a model trained with and without that data point.
