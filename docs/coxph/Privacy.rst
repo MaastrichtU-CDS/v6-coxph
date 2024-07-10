@@ -5,7 +5,7 @@ Guards
 ------
 
 Sample size threshold
-~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 The algorithm has a minimal threshold for the number of rows in the selected database. This threshold is set to 10 rows.
 If the number of rows in a given data station is below this threshold,
 the data station will not be included in the federated learning process and will be marked in the result.
@@ -39,7 +39,7 @@ The amount of information shared was considered insufficient to allow reconstruc
 ⚠ Differencing
 ~~~~~~~~~~~~~~
 **Risk analysis**:
-This is indeed possible in case a data station manager were to change the dataset after performing a task, but data station managers should not be allowed to run tasks to prevent this.
+This is indeed possible in case a data station manager were to change the dataset after performing a task, but data station managers should not be allowed to run tasks to prevent this. Scenarios in which users try to infer sensitive data by altering the selected data are currently not possible because the algorithm does not support filtering.
 
 ✔ Deep Leakage from Gradients (DLG)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -62,7 +62,8 @@ The model prediction can indeed be used to infer the outcome of an actual indivi
 To be determined
 
 .. TODO verify whether these definitions are correct.
-For reference:
+For reference
+-------------
 
 - Reconstruction: This attack involves an adversary trying to reconstruct the original dataset from the shared model parameters. This is a risk if the model reveals too much information about the data it was trained on.
 - Differencing: This attack involves an adversary trying to infer information about a specific data point by comparing the outputs of a model trained with and without that data point.
