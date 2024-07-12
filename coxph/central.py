@@ -5,13 +5,14 @@ that the central method is executed on a node, just like any other method.
 The results in a return statement are sent to the vantage6 server (after
 encryption if that is enabled).
 """
-import math
-
+import time
 import numpy as np
-import pandas as pd
-
+import json
 from scipy.stats import norm
+import pandas as pd
+import math
 from scipy.linalg import solve
+
 from vantage6.algorithm.tools.util import info, warn, error
 from vantage6.algorithm.tools.decorators import algorithm_client
 from vantage6.algorithm.client import AlgorithmClient
@@ -19,7 +20,8 @@ from vantage6.algorithm.client import AlgorithmClient
 
 @algorithm_client
 def central(
-        client: AlgorithmClient, time_col, outcome_col, expl_vars, organization_ids):
+        client: AlgorithmClient, time_col, outcome_col, expl_vars, organization_ids, sensitivity, epsilon,
+        baseline_hf=True, binning=True, bin_type="Dynamic", min_count=2, differential_privacy=True):
     """
     This function is the central part of the algorithm. It performs the main computation and coordination tasks.
 
@@ -41,35 +43,131 @@ def central(
     else:
         ids = organization_ids
 
-    # Create a list to store the IDs of organizations that do not meet privacy guards
-    excluded_ids = []
-
     info(f'sending task to organizations {ids}')
 
     n_covs = len(expl_vars)
     epochs = 10
 
-    # Define input parameters for a subtask - get unique event times
-    info("Defining input parameters for subtask - get unique event times")
-    input_ = {
-        "method": "get_unique_event_times",
-        "kwargs": {
-            "time_col": time_col,
-            "outcome_col": outcome_col
-        },
-    }
+    if binning:
 
-    n_loops = 0
-    n_threshold_met = False
-    while not n_threshold_met:
-        # This list represents the organizations that will be excluded in the following loop
-        _excluded_ids = []
-        if n_loops > 2:
-            error("Sample size violations should be eliminated yet criteria are not met. Exiting")
-            raise ValueError("Sample size violations should be eliminated yet criteria are not. Exiting")
+        # Step 1: Get sample size from each node
+        info("Getting sample sizes from all nodes")
+        input_ = {
+            "method": "get_sample_size"
+        }
 
-        n_loops += 1
-        # Create a subtask for all selected organizations in the collaboration.
+        # create a subtask for all organizations in the collaboration.
+        info("Creating subtask for all organizations in the collaboration")
+        task = client.task.create(
+            input_=input_,
+            organizations=ids,
+            name="Sample size",
+            description="Getting sample sizes from all nodes to calculate bin size using Sturges' rule"
+        )
+
+        # wait for node to return results of the subtask.
+        info("Waiting for results")
+        results = client.wait_for_results(task_id=task.get("id"))
+        info("Results obtained!")
+
+        total_sample_size = sum([output["sample_size"] for output in results])
+        bin_size = int(math.ceil(math.log2(total_sample_size) + 1))  # Sturges' rule
+
+        # Step 2: Get local bin edges from each node
+        info("Getting local bin edges from all nodes")
+        input_ = {
+            "method": "get_local_bin_edges",
+            "kwargs": {
+                "time_col": time_col,
+                "outcome_col": outcome_col,
+                'bin_size': bin_size,
+                'bin_type': bin_type,
+                'min_count': min_count,
+                'differential_privacy': differential_privacy,
+                'sensitivity': sensitivity,
+                'epsilon': epsilon
+            },
+        }
+
+        # create a subtask for all organizations in the collaboration.
+        info("Creating subtask for all organizations in the collaboration")
+        task = client.task.create(
+            input_=input_,
+            organizations=ids,
+            name="Get local bin edges",
+            description="Getting local bin edges from all nodes"
+        )
+
+        # wait for node to return results of the subtask.
+        info("Waiting for results")
+        results = client.wait_for_results(task_id=task.get("id"))
+        info("Results obtained!")
+
+        # Combine bin edges from all nodes and deduplicate
+        bin_edges_list = [output['bin_edges'] for output in results]
+        combined_bin_edges = np.unique(np.concatenate(bin_edges_list))
+
+        if bin_type == "Dynamic":
+            global_bin_edges = np.round((np.quantile(combined_bin_edges, np.linspace(0, 1, bin_size + 1))), 0).tolist()
+
+        elif bin_type == "Fixed":
+            # Calculate global min and max for re-binning
+            global_min = min(combined_bin_edges)
+            global_max = max(combined_bin_edges)
+
+            # Recalculate bin edges with a common set of bin edges
+            global_bin_edges = [round(edge, 0) for edge in (np.linspace(global_min, global_max, bin_size + 1)).tolist()]
+
+        else:
+            info("Unsupported bin type encountered. Exiting the algorithm.")
+            return {"error": "Unsupported bin type encountered. Exiting the algorithm."}
+
+        print(global_bin_edges)
+
+        # Define input parameters for a subtask - get unique event times
+        info("Defining input parameters for subtask - get unique event times")
+        input_ = {
+            "method": "get_binned_unique_event_times",
+            "kwargs": {
+                "time_col": time_col,
+                "outcome_col": outcome_col,
+                'bin_edges': global_bin_edges,
+                'bin_type': bin_type,
+                'min_count': min_count,
+                'differential_privacy': differential_privacy,
+                'sensitivity': sensitivity,
+                'epsilon': epsilon
+            },
+        }
+
+        # create a subtask for all organizations in the collaboration.
+        info("Creating subtask for all organizations in the collaboration")
+        task = client.task.create(
+            input_=input_,
+            organizations=ids,
+            name="Unique event times",
+            description="Getting unique event times and their counts"
+        )
+
+        # wait for node to return results of the subtask.
+        info("Waiting for results")
+        results = client.wait_for_results(task_id=task.get("id"))
+        info("Results obtained!")
+
+    elif not binning:
+        # Define input parameters for a subtask - get unique event times
+        info("Defining input parameters for subtask - get unique event times")
+        input_ = {
+            "method": "get_unique_event_times",
+            "kwargs": {
+                "time_col": time_col,
+                "outcome_col": outcome_col,
+                'differential_privacy': differential_privacy,
+                'sensitivity': sensitivity,
+                'epsilon': epsilon
+            },
+        }
+
         info("Creating subtask for all selected organizations in the collaboration")
         task = client.task.create(
             input_=input_,
@@ -83,29 +181,15 @@ def central(
         results = client.wait_for_results(task_id=task.get("id"))
         info("Results obtained!")
 
-        unique_time_events = []
-        for output in results:
-
-            # Exclude organizations that do not meet the N-threshold
-            if "N-Threshold not met" in output:
-                warn(f"Insufficient samples for organization {output['N-Threshold not met']}. "
-                     f"Excluding organization from analysis.")
-                ids.remove(output["N-Threshold not met"])
-                excluded_ids.append(output["N-Threshold not met"])
-                _excluded_ids.append(output["N-Threshold not met"])
-                continue
-
-            output = pd.DataFrame.from_dict(output["times"])
-            unique_time_events.append(output)
-
-        if len(_excluded_ids) == 0:
-            n_threshold_met = True
-        elif len(ids) == 0:
-            warn("No organizations meet the minimal sample size threshold, returning NaN.")
-            return {"excluded_organizations": excluded_ids, "table": np.nan}
+    unique_time_events = []
+    for output in results:
+        output = pd.DataFrame.from_dict(output["times"])
+        unique_time_events.append(output)
 
     aggregated_time_events = pd.concat(unique_time_events)
     aggregated_time_events = aggregated_time_events.groupby(time_col, as_index=False).sum()
+
+    print(aggregated_time_events)
 
     # Get the list of unique_time_events
     unique_time_events = aggregated_time_events[time_col].tolist()
@@ -117,6 +201,9 @@ def central(
         "kwargs": {
             "outcome_col": outcome_col,
             "expl_vars": expl_vars,
+            'differential_privacy': differential_privacy,
+            'sensitivity': sensitivity,
+            'epsilon': epsilon
         }
     }
 
@@ -153,7 +240,10 @@ def central(
                 'time_col': time_col,
                 "expl_vars": expl_vars,
                 'beta': beta,
-                'unique_time_events': unique_time_events
+                'unique_time_events': unique_time_events,
+                'differential_privacy': differential_privacy,
+                'sensitivity': sensitivity,
+                'epsilon': epsilon
             }
         }
 
@@ -220,7 +310,32 @@ def central(
     results["p-value"] = pvalues
     results = results.set_index("Var")
 
-    return {"included_organizations": ids, "excluded_organizations": excluded_ids, "model": results.to_dict()}
+    if baseline_hf:
+        # Compute the baseline hazard function
+        cumulative_hazard = compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1)
+
+        return {"cumulative_hazard": cumulative_hazard.to_dict(),
+                "coxph_results": results.to_dict()
+        }
+
+    return {"coxph_results": results.to_dict()}
+
+
+def compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1):
+    baseline_hazard = []
+    cumulative_baseline_hazard = []
+    for t in range(len(unique_time_events)):
+        # Compute the baseline hazard at each unique event time
+        h0_t = aggregated_time_events.loc[aggregated_time_events[time_col] == unique_time_events[t], 'freq'].values[0] / summed_agg1[t]
+        baseline_hazard.append(h0_t)
+
+        # Compute the cumulative baseline hazard at each unique event time
+        H0_t = np.sum(baseline_hazard)
+        cumulative_baseline_hazard.append({'time': unique_time_events[t], 'cumulative_hazard': H0_t})
+
+    cumulative_baseline_hazard_df = pd.DataFrame(cumulative_baseline_hazard)
+
+    return cumulative_baseline_hazard_df
 
 
 def compute_derivatives(summed_agg1, summed_agg2, summed_agg3, aggregated_time_events, z_sum):
@@ -231,7 +346,7 @@ def compute_derivatives(summed_agg1, summed_agg2, summed_agg3, aggregated_time_e
     summed_agg1 (numpy.ndarray): The aggregated sum of the first set of values.
     summed_agg2 (numpy.ndarray): The aggregated sum of the second set of values.
     summed_agg3 (numpy.ndarray): The aggregated sum of the third set of values.
-    aggregated_time_events (pandas.DataFrame): The DataFrame containing the frequency of unique event times.
+    aggregated_time_events (pandas.DataFrame): The DataFrame containing the frequency of unique event times and their counts.
     z_sum (float): The summed Z statistic.
 
     Returns:

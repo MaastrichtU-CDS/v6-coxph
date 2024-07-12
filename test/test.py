@@ -18,7 +18,7 @@ from pathlib import Path
 # get path of current directory
 current_path = Path(__file__).parent
 
-## Mock client
+# Mock client
 client = MockAlgorithmClient(
     datasets=[
         # Data for first organization
@@ -50,7 +50,14 @@ central_task = client.task.create(
             "time_col": "overall_survival_in_days",
             "outcome_col": "event_overall_survival",
             "expl_vars": ["clin_n_1", "index_tumour_location_oropharynx"],
-            "organization_ids": org_ids,
+            "baseline_hf": True,
+            "binning": True,
+            "bin_type": "Dynamic",
+            "min_count": 2,
+            "differential_privacy": True,
+            "sensitivity": 1.0,  # Set the sensitivity of the Cox model coefficients for differential privacy
+            "epsilon": 1,   # Set desired epsilon value for differential privacy
+            "organization_ids": org_ids
 
         }
     },
