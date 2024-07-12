@@ -199,7 +199,7 @@ def central(
 
 def compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1):
     """
-    This function computes the baseline hazard for each unique event time.
+    This function computes the cumulative baseline hazard for each unique event time.
 
     Parameters:
     time_col (str): The name of the column in the DataFrame that contains the time data.
@@ -208,27 +208,27 @@ def compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events
     summed_agg1 (numpy.ndarray): The aggregated sum of the first set of values.
 
     Returns:
-    pandas.DataFrame: A DataFrame containing the baseline hazard for each unique event time.
+    pandas.DataFrame: A DataFrame containing the cumulative baseline hazard for each unique event time.
     """
 
     # Initialize an empty list to store the baseline hazard for each unique event time
     baseline_hazard = []
+    cumulative_baseline_hazard = []
 
     # Iterate over each unique event time
     for t in range(len(unique_time_events)):
         # Compute the baseline hazard at each unique event time
-        h0_t = 1 / summed_agg1[t]
-        # TODO Uncomment this line to compute cumulative hazard
-        #h0_t = aggregated_time_events.loc[aggregated_time_events[time_col] == unique_time_events[t], 'freq'].values[0] / \
-        #       summed_agg1[t]
-        # Append the computed baseline hazard to the list
-        baseline_hazard.append({'time': unique_time_events[t], 'hazard': h0_t})
+        h0_t = aggregated_time_events.loc[aggregated_time_events[time_col] == unique_time_events[t], 'freq'].values[0] / \
+               summed_agg1[t]
+        baseline_hazard.append(h0_t)
 
-    # Convert the list of baseline hazards into a DataFrame
-    baseline_hazard_df = pd.DataFrame(baseline_hazard)
+        # Compute the cumulative baseline hazard at each unique event time
+        H0_t = np.sum(baseline_hazard)
+        cumulative_baseline_hazard.append({'time': unique_time_events[t], 'cumulative_hazard': H0_t})
 
-    # Return the DataFrame containing the baseline hazard for each unique event time
-    return baseline_hazard_df
+    cumulative_baseline_hazard_df = pd.DataFrame(cumulative_baseline_hazard)
+
+    return cumulative_baseline_hazard_df
 
 
 def compute_derivatives(summed_agg1, summed_agg2, summed_agg3, aggregated_time_events, z_sum):
