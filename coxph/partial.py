@@ -113,6 +113,9 @@ def get_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, time_col, 
 
     Returns:
     - dict: A dictionary containing a DataFrame of unique event times and their counts.
+
+    Note:
+    - This function is only called if the 'binning' parameter is set to False in the central task.
     """
 
     info("Computing unique event times")
@@ -146,12 +149,12 @@ def get_sample_size(client: AlgorithmClient, df: pd.DataFrame):
 @data(1)
 @algorithm_client
 def get_local_bin_edges(client: AlgorithmClient, df: pd.DataFrame, time_col, outcome_col, bin_size,
-                        bin_type, min_count, differential_privacy, sensitivity, epsilon):
+                        bin_type, differential_privacy, sensitivity, epsilon):
     """
     Calculates the local bin edges for event times in the provided DataFrame, optionally applying differential privacy.
 
-    This function determines the bin edges for event times based on the specified binning strategy ('Dynamic' or 'Fixed').
-    For 'Dynamic' binning, quantiles are used to determine bin edges, ensuring an even distribution of event times across bins.
+    This function determines the bin edges for event times based on the specified binning strategy ('Quantile' or 'Fixed').
+    For 'Quantile' binning, quantiles are used to determine bin edges, ensuring an even distribution of event times across bins.
     For 'Fixed' binning, bin edges are calculated based on fixed intervals over the range of event times. If differential
     privacy is enabled, noise is added to the bin edges to protect the privacy of the data.
 
@@ -160,11 +163,9 @@ def get_local_bin_edges(client: AlgorithmClient, df: pd.DataFrame, time_col, out
     - df (pd.DataFrame): The DataFrame containing the data.
     - time_col (str): The name of the column in the DataFrame that contains the time data.
     - outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
-    - bin_size (int): The size of the bins to be used in the calculation. Represents the number of bins for 'Dynamic'
+    - bin_size (int): The size of the bins to be used in the calculation. Represents the number of bins for 'Quantile'
                       binning and the width of each bin for 'Fixed' binning.
-    - bin_type (str): The type of binning strategy to use ('Dynamic' or 'Fixed').
-    - min_count (int): The minimum number of events required in each bin. Not used in this function but included for
-                       consistency with related functions.
+    - bin_type (str): The type of binning strategy to use ('Quantile' or 'Fixed').
     - differential_privacy (bool): Indicates whether differential privacy should be applied to the bin edges.
     - sensitivity (float): The sensitivity parameter for differential privacy. Used to calculate the scale of the Laplace
                            noise added to the bin edges.
@@ -175,25 +176,21 @@ def get_local_bin_edges(client: AlgorithmClient, df: pd.DataFrame, time_col, out
             an error message is returned instead.
     """
 
-    # Add Laplace noise
-    # df[time_col] = privatize_data(df[time_col], sensitivity, epsilon)
-
     # Filter the DataFrame to only include rows where the outcome is 1
     event_data = df[df[outcome_col] == 1]
     # Extract the unique event times
     event_times = event_data[time_col]
 
-    if bin_type == 'Dynamic':
+    if bin_type == 'Quantile':
         # Calculate the quantiles and bin edges, rounding to 2 decimal places
         bin_edges = np.round(np.quantile(event_times, np.linspace(0, 1, bin_size + 1)), decimals=0)
         # Calculate event counts in each bin
         # event_counts, _ = np.histogram(event_times, bins=bin_edges)
         # Add noise to the bin edges to ensure privacy (only if differential privacy is enabled)
         if differential_privacy:
-            bin_edges = privatize_data(bin_edges[1:].tolist(), sensitivity, epsilon)
+            bin_edges = privatize_data(bin_edges.tolist(), sensitivity, epsilon)
         else:
-            bin_edges = bin_edges[1:].tolist()
-        print(bin_edges)
+            bin_edges = bin_edges.tolist()
 
     elif bin_type == 'Fixed':
         # Calculate the bin edges using fixed bin sizes, rounding to 2 decimal places
@@ -205,7 +202,6 @@ def get_local_bin_edges(client: AlgorithmClient, df: pd.DataFrame, time_col, out
             bin_edges = privatize_data(bin_edges.tolist(), sensitivity, epsilon)
         else:
             bin_edges = bin_edges.tolist()
-        print(bin_edges)
 
     else:
         info("Unsupported bin type encountered. Exiting the algorithm.")
@@ -218,12 +214,12 @@ def get_local_bin_edges(client: AlgorithmClient, df: pd.DataFrame, time_col, out
 @data(1)
 @algorithm_client
 def get_binned_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, time_col, outcome_col, bin_edges,
-                                  bin_type, min_count, differential_privacy, sensitivity, epsilon):
+                                  bin_type, min_count):
     """
     Calculates the unique event times and their frequencies in the dataframe, placing them in specified bins.
 
     This function processes event times from the provided DataFrame, categorizing them into bins defined by
-    'bin_edges'. It supports both 'Dynamic' and 'Fixed' binning strategies. The function iteratively adjusts
+    'bin_edges'. It supports both 'Quantile' and 'Fixed' binning strategies. The function iteratively adjusts
     bin edges to ensure each bin meets a minimum count requirement ('min_count'), enhancing the privacy and
     reliability of the results. Optionally, differential privacy can be applied to further protect the data.
 
@@ -233,11 +229,8 @@ def get_binned_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, tim
     - time_col (str): The name of the column in the DataFrame that contains the time data.
     - outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
     - bin_edges (numpy.ndarray): The edges of the bins to be used in the calculation.
-    - bin_type (str): The type of binning strategy ('Dynamic' or 'Fixed').
+    - bin_type (str): The type of binning strategy ('Quantile' or 'Fixed').
     - min_count (int): The minimum number of events required in each bin.
-    - differential_privacy (bool): Indicates whether differential privacy should be applied.
-    - sensitivity (float): The sensitivity parameter for differential privacy.
-    - epsilon (float): The epsilon parameter for differential privacy.
 
     Returns:
     - dict: A dictionary containing the binned unique event times and their frequencies.
@@ -252,44 +245,42 @@ def get_binned_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, tim
     event_data = df[df[outcome_col] == 1]
     event_times = event_data[time_col]
 
-    if bin_type == 'Dynamic' or bin_type == 'Fixed':
-        bin_edges = bin_edges.copy()  # Make a copy to avoid modifying the original bin_edges
-        while True:
-            iteration_count += 1
-            # Digitize the times with global bin edges to get the indices of the event times in the bins
-            binned_times = np.digitize(event_times, bins=bin_edges, right=True)
-            # Count events in each bin
+    bin_edges = bin_edges.copy()  # Make a copy to avoid modifying the original bin_edges
+    while True:
+        iteration_count += 1
+        # Digitize the times with global bin edges to get the indices of the event times in the bins
+        binned_times = np.digitize(event_times, bins=bin_edges, right=True)
+        # Count events in each bin
+        if bin_type == 'Quantile':
+            bin_labels = np.round(bin_edges, 0)  # Use the left edge of each bin as the bin label
+        elif bin_type == 'Fixed':
             bin_labels = np.round(bin_edges[:-1], 0)  # Use the left edge of each bin as the bin label
-            counts = np.zeros(len(bin_labels))
+        counts = np.zeros(len(bin_labels))
 
-            for i in range(len(bin_labels)):
-                counts[i] = event_data[(binned_times == (i + 1))].shape[0]
+        for i in range(len(bin_labels)):
+            counts[i] = event_data[(binned_times == (i + 1))].shape[0]
 
-            # Check if all bins meet the min_count requirement
-            if np.all(counts >= min_count) or iteration_count >= max_iterations:
-                break  # All bins have sufficient counts, exit the loop
+        # Check if all bins meet the min_count requirement
+        if np.all(counts >= min_count) or iteration_count >= max_iterations:
+            break  # All bins have sufficient counts, exit the loop
 
-            # Adjust bin edges to ensure min_count in each bin
-            for i in range(len(counts)):
-                if counts[i] < min_count:
-                    # Find the closest non-zero bin and adjust edges accordingly
-                    if i > 0 and counts[i - 1] > min_count:
-                        bin_edges[i] -= (bin_edges[i] - bin_edges[i - 1]) * 0.05
-                    if i < len(counts) - 1 and counts[i + 1] > min_count:
-                        bin_edges[i + 1] += (bin_edges[i + 1] - bin_edges[i]) * 0.05
+        # Adjust bin edges to ensure min_count in each bin
+        for i in range(len(counts)):
+            if counts[i] < min_count:
+                # Find the closest non-zero bin and adjust edges accordingly
+                if i > 0 and counts[i - 1] > min_count:
+                    bin_edges[i] -= (bin_edges[i] - bin_edges[i - 1]) * 0.05
+                if i < len(counts) - 1 and counts[i + 1] > min_count:
+                    bin_edges[i + 1] += (bin_edges[i + 1] - bin_edges[i]) * 0.05
 
-            # Log progress for debugging
-            # print(f"Iteration {iteration_count}: Adjusting bin edges to meet min_count requirements")
+    # Log progress for debugging
+    # print(f"Iteration {iteration_count}: Adjusting bin edges to meet min_count requirements")
 
-        # Create the times DataFrame
-        times_df = pd.DataFrame({
-            time_col: bin_labels,
-            'freq': counts
-        })
-
-    else:
-        info("Unsupported bin type encountered. Exiting the algorithm.")
-        return {"error": "Unsupported bin type encountered. Exiting the algorithm."}
+    # Create the times DataFrame
+    times_df = pd.DataFrame({
+        time_col: bin_labels,
+        'freq': counts
+    })
 
     return {
         'times': times_df.to_dict()
@@ -298,8 +289,7 @@ def get_binned_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, tim
 
 @data(1)
 @algorithm_client
-def compute_summed_z(client: AlgorithmClient, df: pd.DataFrame, outcome_col, expl_vars,
-                     differential_privacy, sensitivity, epsilon):
+def compute_summed_z(client: AlgorithmClient, df: pd.DataFrame, outcome_col, expl_vars):
     """
     This function computes the sum of the specified explanatory variables for the outcome events.
 

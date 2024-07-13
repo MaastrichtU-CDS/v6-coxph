@@ -21,7 +21,7 @@ from vantage6.algorithm.client import AlgorithmClient
 @algorithm_client
 def central(
         client: AlgorithmClient, time_col, outcome_col, expl_vars, organization_ids, sensitivity, epsilon,
-        baseline_hf=True, binning=True, bin_type="Dynamic", min_count=2, differential_privacy=True):
+        baseline_hf=True, binning=True, bin_type="Fixed", min_count=2, differential_privacy=True):
     """
     This function is the central part of the algorithm. It performs the main computation and coordination tasks.
 
@@ -82,7 +82,6 @@ def central(
                 "outcome_col": outcome_col,
                 'bin_size': bin_size,
                 'bin_type': bin_type,
-                'min_count': min_count,
                 'differential_privacy': differential_privacy,
                 'sensitivity': sensitivity,
                 'epsilon': epsilon
@@ -107,7 +106,7 @@ def central(
         bin_edges_list = [output['bin_edges'] for output in results]
         combined_bin_edges = np.unique(np.concatenate(bin_edges_list))
 
-        if bin_type == "Dynamic":
+        if bin_type == "Quantile":
             global_bin_edges = np.round((np.quantile(combined_bin_edges, np.linspace(0, 1, bin_size + 1))), 0).tolist()
 
         elif bin_type == "Fixed":
@@ -122,8 +121,6 @@ def central(
             info("Unsupported bin type encountered. Exiting the algorithm.")
             return {"error": "Unsupported bin type encountered. Exiting the algorithm."}
 
-        print(global_bin_edges)
-
         # Define input parameters for a subtask - get unique event times
         info("Defining input parameters for subtask - get unique event times")
         input_ = {
@@ -133,10 +130,7 @@ def central(
                 "outcome_col": outcome_col,
                 'bin_edges': global_bin_edges,
                 'bin_type': bin_type,
-                'min_count': min_count,
-                'differential_privacy': differential_privacy,
-                'sensitivity': sensitivity,
-                'epsilon': epsilon
+                'min_count': min_count
             },
         }
 
@@ -155,7 +149,7 @@ def central(
         info("Results obtained!")
 
     elif not binning:
-        # Define input parameters for a subtask - get unique event times
+        # Define input parameters for a subtask - to get all unique event times if binning is not enabled
         info("Defining input parameters for subtask - get unique event times")
         input_ = {
             "method": "get_unique_event_times",
@@ -189,8 +183,6 @@ def central(
     aggregated_time_events = pd.concat(unique_time_events)
     aggregated_time_events = aggregated_time_events.groupby(time_col, as_index=False).sum()
 
-    print(aggregated_time_events)
-
     # Get the list of unique_time_events
     unique_time_events = aggregated_time_events[time_col].tolist()
 
@@ -200,10 +192,7 @@ def central(
         "method": "compute_summed_z",
         "kwargs": {
             "outcome_col": outcome_col,
-            "expl_vars": expl_vars,
-            'differential_privacy': differential_privacy,
-            'sensitivity': sensitivity,
-            'epsilon': epsilon
+            "expl_vars": expl_vars
         }
     }
 

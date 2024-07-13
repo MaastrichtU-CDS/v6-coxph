@@ -50,11 +50,11 @@ central_task = client.task.create(
             "time_col": "overall_survival_in_days",
             "outcome_col": "event_overall_survival",
             "expl_vars": ["clin_n_1", "index_tumour_location_oropharynx"],
-            "baseline_hf": True,
-            "binning": True,
-            "bin_type": "Dynamic",
-            "min_count": 2,
-            "differential_privacy": True,
+            "baseline_hf": True,  # Set to True to include cumulative baseline hazard function in the results
+            "binning": True,  # Set to True to enable binning of event times for added privacy
+            "bin_type": "Fixed",  # Set the type of binning to use for event times ("Fixed" or "Quantile")
+            "min_count": 2,  # Set the minimum number of events in a bin if using binning
+            "differential_privacy": False,  # Set to True to enable differential privacy
             "sensitivity": 1.0,  # Set the sensitivity of the Cox model coefficients for differential privacy
             "epsilon": 1,   # Set desired epsilon value for differential privacy
             "organization_ids": org_ids
