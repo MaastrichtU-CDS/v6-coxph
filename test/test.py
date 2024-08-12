@@ -11,9 +11,10 @@ installed. This can be done by running:
 
     pip install vantage6-algorithm-tools
 """
-import numpy as np
-from vantage6.algorithm.tools.mock_client import MockAlgorithmClient
+
+import json
 from pathlib import Path
+from vantage6.algorithm.tools.mock_client import MockAlgorithmClient
 
 # get path of current directory
 current_path = Path(__file__).parent
@@ -51,12 +52,12 @@ central_task = client.task.create(
             "outcome_col": "event_overall_survival",
             "expl_vars": ["clin_n_1", "index_tumour_location_oropharynx"],
             "baseline_hf": True,  # Set to True to include cumulative baseline hazard function in the results
-            "binning": True,  # Set to True to enable binning of event times for added privacy
-            "bin_type": "Fixed",  # Set the type of binning to use for event times ("Fixed" or "Quantile")
-            "min_count": 2,  # Set the minimum number of events in a bin if using binning
-            "differential_privacy": False,  # Set to True to enable differential privacy
-            "sensitivity": 1.0,  # Set the sensitivity of the Cox model coefficients for differential privacy
-            "epsilon": 1,   # Set desired epsilon value for differential privacy
+            "binning": False,  # Set to True to enable binning of event times for added privacy
+            "bin_type": "Quantile",  # Set the type of binning to use for event times ("Fixed" or "Quantile")
+            "differential_privacy": True,  # Set to True to enable differential privacy
+            "privacy_target": "predictors",  # Set the target of the differential privacy ("predictors" or "aggregates")
+            "sensitivity": 1,  # Set the sensitivity of the Cox model coefficients for differential privacy
+            "epsilon": 0.3,  # Set desired epsilon value for differential privacy
             "organization_ids": org_ids
 
         }

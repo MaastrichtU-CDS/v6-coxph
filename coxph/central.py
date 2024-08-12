@@ -5,14 +5,12 @@ that the central method is executed on a node, just like any other method.
 The results in a return statement are sent to the vantage6 server (after
 encryption if that is enabled).
 """
-import time
-import numpy as np
-import json
-from scipy.stats import norm
-import pandas as pd
-import math
-from scipy.linalg import solve
 
+import math
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
+from scipy.linalg import solve
 from vantage6.algorithm.tools.util import info, warn, error
 from vantage6.algorithm.tools.decorators import algorithm_client
 from vantage6.algorithm.client import AlgorithmClient
@@ -21,7 +19,8 @@ from vantage6.algorithm.client import AlgorithmClient
 @algorithm_client
 def central(
         client: AlgorithmClient, time_col, outcome_col, expl_vars, organization_ids, sensitivity, epsilon,
-        baseline_hf=True, binning=True, bin_type="Fixed", min_count=2, differential_privacy=True):
+        baseline_hf=True, binning=True, bin_type="Fixed", differential_privacy=True,
+        privacy_target="predictors"):
     """
     This function is the central part of the algorithm. It performs the main computation and coordination tasks.
 
@@ -31,6 +30,13 @@ def central(
     outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
     expl_vars (list): A list of explanatory variables to be used in the computation.
     organization_ids (list): A list of organization IDs that participate in the collaboration.
+    sensitivity (float): The sensitivity of the Cox model coefficients for differential privacy.
+    epsilon (float): The desired epsilon value for differential privacy.
+    baseline_hf (bool): A boolean flag to include the cumulative baseline hazard function in the results.
+    binning (bool): A boolean flag to enable binning of event times for added privacy.
+    bin_type (str): The type of binning to use for event times ("Fixed" or "Quantile").
+    differential_privacy (bool): A boolean flag to enable differential privacy on the aggregates.
+    privacy_target (str): The target of the differential privacy ("predictors" or "aggregates").
 
     Returns:
     pandas.DataFrame: A DataFrame containing the results of the computation.
@@ -129,8 +135,7 @@ def central(
                 "time_col": time_col,
                 "outcome_col": outcome_col,
                 'bin_edges': global_bin_edges,
-                'bin_type': bin_type,
-                'min_count': min_count
+                'bin_type': bin_type
             },
         }
 
@@ -140,7 +145,7 @@ def central(
             input_=input_,
             organizations=ids,
             name="Unique event times",
-            description="Getting unique event times and their counts"
+            description="Getting event times and their counts based on global bin edges"
         )
 
         # wait for node to return results of the subtask.
@@ -155,10 +160,7 @@ def central(
             "method": "get_unique_event_times",
             "kwargs": {
                 "time_col": time_col,
-                "outcome_col": outcome_col,
-                'differential_privacy': differential_privacy,
-                'sensitivity': sensitivity,
-                'epsilon': epsilon
+                "outcome_col": outcome_col
             },
         }
 
@@ -182,7 +184,6 @@ def central(
 
     aggregated_time_events = pd.concat(unique_time_events)
     aggregated_time_events = aggregated_time_events.groupby(time_col, as_index=False).sum()
-
     # Get the list of unique_time_events
     unique_time_events = aggregated_time_events[time_col].tolist()
 
@@ -231,6 +232,7 @@ def central(
                 'beta': beta,
                 'unique_time_events': unique_time_events,
                 'differential_privacy': differential_privacy,
+                'privacy_target': privacy_target,
                 'sensitivity': sensitivity,
                 'epsilon': epsilon
             }
@@ -256,6 +258,7 @@ def central(
         summed_agg1 = 0
         summed_agg2 = 0
         summed_agg3 = 0
+        snr = 0
 
         for output in results:
             summed_agg1 += np.array(output['agg1'])
@@ -300,10 +303,11 @@ def central(
     results = results.set_index("Var")
 
     if baseline_hf:
-        # Compute the baseline hazard function
-        cumulative_hazard = compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1)
+        # Compute the cumulative baseline hazard and survival function
+        survival_function, cumulative_hazard = compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1)
 
-        return {"cumulative_hazard": cumulative_hazard.to_dict(),
+        return {"cumulative_baseline_hazard": cumulative_hazard.to_dict(),
+                "baseline_survival_function": survival_function.to_dict(),
                 "coxph_results": results.to_dict()
         }
 
@@ -311,32 +315,63 @@ def central(
 
 
 def compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1):
+    """
+     Compute the cumulative baseline hazard and survival function.
+
+     Parameters:
+     time_col (str): The name of the column in the DataFrame that contains the time data.
+     aggregated_time_events (pandas.DataFrame): DataFrame containing the frequency of unique event times and their counts.
+     unique_time_events (list): A list of unique event times.
+     summed_agg1 (numpy.ndarray): The aggregated sum of the first set of values.
+
+     Returns:
+     tuple: A tuple containing:
+         - pandas.DataFrame: DataFrame containing the survival function, with columns ['time', 'survival'].
+         - pandas.DataFrame: DataFrame containing the cumulative baseline hazard, with columns ['time', 'hazard'].
+     """
     baseline_hazard = []
     cumulative_baseline_hazard = []
     for t in range(len(unique_time_events)):
-        # Compute the baseline hazard at each unique event time
-        h0_t = aggregated_time_events.loc[aggregated_time_events[time_col] == unique_time_events[t], 'freq'].values[0] / summed_agg1[t]
-        baseline_hazard.append(h0_t)
+        # Compute the hazard at each unique event time using the Breslow estimator
+        hazard = aggregated_time_events.loc[aggregated_time_events[time_col] == unique_time_events[t], 'freq'].values[0] / summed_agg1[t]
+        baseline_hazard.append(hazard)
 
         # Compute the cumulative baseline hazard at each unique event time
         H0_t = np.sum(baseline_hazard)
-        cumulative_baseline_hazard.append({'time': unique_time_events[t], 'cumulative_hazard': H0_t})
+        cumulative_baseline_hazard.append({'time': unique_time_events[t], 'hazard': H0_t})
 
     cumulative_baseline_hazard_df = pd.DataFrame(cumulative_baseline_hazard)
+    baseline_survival_function_df = calculate_survival_function(cumulative_baseline_hazard_df)
 
-    return cumulative_baseline_hazard_df
+    return baseline_survival_function_df, cumulative_baseline_hazard_df
+
+
+def calculate_survival_function(cumulative_baseline_hazard_df):
+    """
+    Calculate the survival function from the cumulative baseline hazard.
+
+    Parameters:
+    cumulative_baseline_hazard_df (pandas.DataFrame): DataFrame containing the cumulative baseline hazard,
+                                           with columns ['time', 'hazard'].
+
+    Returns:
+    pandas.DataFrame: DataFrame containing the survival function, with columns ['time', 'survival'].
+    """
+
+    # Create a copy of the DataFrame to store the survival function
+    baseline_survival_function = cumulative_baseline_hazard_df.copy()
+
+    # Calculate the survival function using the formula S(t) = exp(-H(t))
+    baseline_survival_function['survival'] = np.exp(-cumulative_baseline_hazard_df['hazard'])
+    # Select only the necessary columns to return
+    baseline_survival_function_df = baseline_survival_function[['time', 'survival']]
+
+    return baseline_survival_function_df
 
 
 def compute_derivatives(summed_agg1, summed_agg2, summed_agg3, aggregated_time_events, z_sum):
     """
     This function computes the primary and secondary derivatives needed for the central algorithm.
-
-    Parameters:
-    summed_agg1 (numpy.ndarray): The aggregated sum of the first set of values.
-    summed_agg2 (numpy.ndarray): The aggregated sum of the second set of values.
-    summed_agg3 (numpy.ndarray): The aggregated sum of the third set of values.
-    aggregated_time_events (pandas.DataFrame): The DataFrame containing the frequency of unique event times and their counts.
-    z_sum (float): The summed Z statistic.
 
     Returns:
     tuple: A tuple containing the primary and secondary derivatives.
