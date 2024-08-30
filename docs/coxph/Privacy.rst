@@ -4,6 +4,21 @@ Privacy
 Guards
 ------
 
+Binning
+~~~~~~~~
+The algorithm uses binning to protect the privacy of the unique event times shared by data stations.
+The optimal number of bins is based on Sturges' rule and can binning can then be used in two ways:
+With fixed binning events are divided into equal-sized;
+With quantile binning events are categorized based on an optimal number of quantiles.
+
+
+Differential privacy
+~~~~~~~~~~~~~~~~~~~~
+The algorithm has differential privacy built in and it can separately be enabled if the user wishes to do so.
+It can be enabled for aggregates or predictors, which has different implications.
+The differential privacy samples noise from a Laplacian distribution for the aggregates and continuous predictors, whilst the randomized response technique is used for the categorical predictors.
+The user can specify the degree of differential privacy by setting the epsilon and sensitivity value.
+
 Sample size threshold
 ~~~~~~~~~~~~~~~~~~~~~
 The algorithm has a minimal threshold for the number of rows in the selected database. This threshold is set to 10 rows.
@@ -11,6 +26,7 @@ If the number of rows in a given data station is below this threshold,
 the data station will not be included in the federated learning process and will be marked in the result.
 This is determined in the first partial task.
 This measure is identifiable as the 'N-threshold' in the central and partial functions.
+
 
 .. What have you done to protect your users' privacy? E.g. threshold on low counts,
 .. noise addition, etc.
@@ -31,39 +47,34 @@ Vulnerabilities to known attacks
 .. which attacks would be possible in your system.
 
 
-✔ Reconstruction
-~~~~~~~~~~~~~~~~
-**Risk analysis**:
-The amount of information shared was considered insufficient to allow reconstruction of the data underlying the model.
+.. list-table::
+    :widths: 25 10 65
+    :header-rows: 1
 
-⚠ Differencing
-~~~~~~~~~~~~~~
-**Risk analysis**:
-This is indeed possible in case a data station manager were to change the dataset after performing a task, but data station managers should not be allowed to run tasks to prevent this. Scenarios in which users try to infer sensitive data by altering the selected data are currently not possible because the algorithm does not support filtering.
-
-✔ Deep Leakage from Gradients (DLG)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-**Risk analysis**:
-This is possible in the central aggregator, but this should be a trusted party and the shared information was considered insufficient to allow for DLG.
-
-✔ Generative Adversarial Networks (GAN)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-**Risk analysis**:
-Synthetic data can indeed be used to (statistically) reproduce the data that underlies the produced model, but without knowing the sensitive information the adversary will not be able to assess its authenticity.
-
-✔ Model Inversion
-~~~~~~~~~~~~~~~~~
-**Risk analysis**:
-The model prediction can indeed be used to infer the outcome of an actual individual, but without knowing the sensitive information the adversary will not be able to assess its authenticity.
-
-⚠ Watermark Attack
-~~~~~~~~~~~~~~~~~~
-**Risk analysis**:
-To be determined
+    * - Attack
+      - Risk eliminated?
+      - Risk analysis
+    * - Reconstruction
+      - ✔
+      - The amount of information shared was considered insufficient to allow reconstruction of the data underlying the model.
+    * - Differencing
+      - ⚠
+      - This is indeed possible in case a data station manager were to change the dataset after performing a task, but data station managers should not be allowed to run tasks to prevent this.
+    * - Deep Leakage from Gradients (DLG)
+      - ✔
+      - This is not possible when using the incorporated differential privacy on the aggregates.
+    * - Generative Adversarial Networks (GAN)
+      - ✔
+      - Synthetic can indeed be used to (statistically) reproduce the data that underlies the produced model, but without knowing the sensitive information the adversary will not be able to assess its authenticity. Using binning and/or differential privacy will further reduce this risk.
+    * - Model Inversion
+      - ✔
+      - The model prediction can indeed be used to infer the outcome of an actual individual, but without knowing the sensitive information the adversary will not be able to assess its authenticity. Using binning and/or differential privacy will further reduce this risk.
+    * - Watermark Attack
+      - ⚠
+      - To be determined
 
 .. TODO verify whether these definitions are correct.
-For reference
--------------
+For reference:
 
 - Reconstruction: This attack involves an adversary trying to reconstruct the original dataset from the shared model parameters. This is a risk if the model reveals too much information about the data it was trained on.
 - Differencing: This attack involves an adversary trying to infer information about a specific data point by comparing the outputs of a model trained with and without that data point.
