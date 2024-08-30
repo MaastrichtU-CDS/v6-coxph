@@ -11,14 +11,15 @@ installed. This can be done by running:
 
     pip install vantage6-algorithm-tools
 """
-import numpy as np
-from vantage6.algorithm.tools.mock_client import MockAlgorithmClient
+
+import json
 from pathlib import Path
+from vantage6.algorithm.tools.mock_client import MockAlgorithmClient
 
 # get path of current directory
 current_path = Path(__file__).parent
 
-## Mock client
+# Mock client
 client = MockAlgorithmClient(
     datasets=[
         # Data for first organization
@@ -50,7 +51,14 @@ central_task = client.task.create(
             "time_col": "overall_survival_in_days",
             "outcome_col": "event_overall_survival",
             "expl_vars": ["clin_n_1", "index_tumour_location_oropharynx"],
-            "organization_ids": org_ids,
+            "baseline_hf": True,  # Set to True to include cumulative baseline hazard function in the results
+            "binning": False,  # Set to True to enable binning of event times for added privacy
+            "bin_type": "Quantile",  # Set the type of binning to use for event times ("Fixed" or "Quantile")
+            "differential_privacy": True,  # Set to True to enable differential privacy
+            "privacy_target": "predictors",  # Set the target of the differential privacy ("predictors" or "aggregates")
+            "sensitivity": 1,  # Set the sensitivity of the Cox model coefficients for differential privacy
+            "epsilon": 0.3,  # Set desired epsilon value for differential privacy
+            "organization_ids": org_ids
 
         }
     },

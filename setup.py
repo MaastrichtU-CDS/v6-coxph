@@ -26,6 +26,7 @@ setup(
         'scikit-learn',
         'requests',
         'scipy',
-        'scikit-survival'
+        'scikit-survival',
+        'flask_sqlalchemy'
     ]
 )
