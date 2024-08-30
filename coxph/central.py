@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 from scipy.linalg import solve
-from vantage6.algorithm.tools.util import info
+from vantage6.algorithm.tools.util import info, error
 from vantage6.algorithm.tools.decorators import algorithm_client
 from vantage6.algorithm.client import AlgorithmClient
 
@@ -55,106 +55,9 @@ def central(
     epochs = 10
 
     if binning:
-        info("Binning is enabled. Proceeding with binning.")
-
-        # Step 1: Get sample size from each node
-        info("Getting sample sizes from all nodes")
-        input_ = {
-            "method": "get_sample_size"
-        }
-
-        # Create a subtask for all organizations in the collaboration.
-        info("Creating subtask for all organizations in the collaboration")
-        task = client.task.create(
-            input_=input_,
-            organizations=ids,
-            name="Sample size",
-            description="Getting sample sizes from all nodes to calculate bin size using Sturges' rule"
-        )
-
-        # Wait for node to return results of the subtask.
-        info("Waiting for results")
-        results = client.wait_for_results(task_id=task.get("id"))
-        info("Results obtained!")
-
-        total_sample_size = sum([output["sample_size"] for output in results])
-        bin_size = int(math.ceil(math.log2(total_sample_size) + 1))  # Sturges' rule
-
-        # Step 2: Get local bin edges from each node
-        info("Getting local bin edges from all nodes")
-        input_ = {
-            "method": "get_local_bin_edges",
-            "kwargs": {
-                "time_col": time_col,
-                "outcome_col": outcome_col,
-                'bin_size': bin_size,
-                'bin_type': bin_type,
-                'differential_privacy': differential_privacy,
-                'sensitivity': sensitivity,
-                'epsilon': epsilon
-            },
-        }
-
-        # Create a subtask for all organizations in the collaboration.
-        info("Creating subtask for all organizations in the collaboration")
-        task = client.task.create(
-            input_=input_,
-            organizations=ids,
-            name="Get local bin edges",
-            description="Getting local bin edges from all nodes"
-        )
-
-        # Wait for node to return results of the subtask.
-        info("Waiting for results")
-        results = client.wait_for_results(task_id=task.get("id"))
-        info("Results obtained!")
-
-        # Combine bin edges from all nodes and deduplicate
-        bin_edges_list = [output['bin_edges'] for output in results]
-        combined_bin_edges = np.unique(np.concatenate(bin_edges_list))
-
-        if bin_type == "Quantile":
-            global_bin_edges = np.round((np.quantile(combined_bin_edges,
-                                                     np.linspace(0, 1, bin_size + 1))),
-                                        0).tolist()
-
-        elif bin_type == "Fixed":
-            # Calculate global min and max for re-binning
-            global_min = min(combined_bin_edges)
-            global_max = max(combined_bin_edges)
-
-            # Recalculate bin edges with a common set of bin edges
-            global_bin_edges = [round(edge, 0) for edge in (np.linspace(global_min, global_max, bin_size + 1)).tolist()]
-
-        else:
-            info("Unsupported bin type encountered. Exiting the algorithm.")
-            return {"error": "Unsupported bin type encountered. Exiting the algorithm."}
-
-        # Define input parameters for a subtask - get unique event times
-        info("Defining input parameters for subtask - get unique event times")
-        input_ = {
-            "method": "get_binned_unique_event_times",
-            "kwargs": {
-                "time_col": time_col,
-                "outcome_col": outcome_col,
-                'bin_edges': global_bin_edges,
-                'bin_type': bin_type
-            },
-        }
-
-        # Create a subtask for all organizations in the collaboration.
-        info("Creating subtask for all organizations in the collaboration")
-        task = client.task.create(
-            input_=input_,
-            organizations=ids,
-            name="Unique event times",
-            description="Getting event times and their counts based on global bin edges"
-        )
-
-        # Wait for node to return results of the subtask.
-        info("Waiting for results")
-        results = client.wait_for_results(task_id=task.get("id"))
-        info("Results obtained!")
+        results = handle_binning(client, time_col=time_col, outcome_col=outcome_col, bin_type=bin_type,
+                                 differential_privacy=differential_privacy, sensitivity=sensitivity, epsilon=epsilon,
+                                 ids=ids)
 
     elif not binning:
         # Define input parameters for a subtask - to get all unique event times if binning is not enabled
@@ -315,9 +218,131 @@ def central(
         return {"cumulative_baseline_hazard": cumulative_hazard.to_dict(),
                 "baseline_survival_function": survival_function.to_dict(),
                 "coxph_results": results.to_dict()
-        }
+                }
 
     return {"coxph_results": results.to_dict()}
+
+
+@algorithm_client
+def handle_binning(client: AlgorithmClient, time_col, outcome_col, bin_type,
+                   differential_privacy, sensitivity, epsilon, ids):
+    """
+    Perform binning of event times.
+
+    Parameters:
+    client (AlgorithmClient): The client instance used to interact with the vantage6 server.
+    time_col (str): The name of the column in the DataFrame that contains the time data.
+    outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
+    differential_privacy (bool): A boolean flag to enable differential privacy.
+    sensitivity (float): The sensitivity of the query/function for differential privacy.
+    epsilon (float): The privacy budget for differential privacy.
+    ids (list): A list of organization IDs that participate in the collaboration.
+    bin_type (str): The type of binning to use for event times ("Fixed" or "Quantile").
+
+    Returns:
+    dict: A dictionary containing the results of the binning process.
+    """
+    info("Binning is enabled. Proceeding with binning.")
+
+    # Step 1: Get sample size from each node
+    info("Getting sample sizes from all nodes")
+    input_ = {
+        "method": "get_sample_size"
+    }
+
+    # Create a subtask for all organizations in the collaboration.
+    info("Creating subtask for all organizations in the collaboration")
+    task = client.task.create(
+        input_=input_,
+        organizations=ids,
+        name="Sample size",
+        description="Getting sample sizes from all nodes to calculate bin size using Sturges' rule"
+    )
+
+    # Wait for node to return results of the subtask.
+    info("Waiting for results")
+    results = client.wait_for_results(task_id=task.get("id"))
+    info("Results obtained!")
+
+    total_sample_size = sum([output["sample_size"] for output in results])
+    bin_size = int(math.ceil(math.log2(total_sample_size) + 1))  # Sturges' rule
+
+    # Step 2: Get local bin edges from each node
+    info("Getting local bin edges from all nodes")
+    input_ = {
+        "method": "get_local_bin_edges",
+        "kwargs": {
+            "time_col": time_col,
+            "outcome_col": outcome_col,
+            'bin_size': bin_size,
+            'bin_type': bin_type,
+            'differential_privacy': differential_privacy,
+            'sensitivity': sensitivity,
+            'epsilon': epsilon
+        },
+    }
+
+    # Create a subtask for all organizations in the collaboration.
+    info("Creating subtask for all organizations in the collaboration")
+    task = client.task.create(
+        input_=input_,
+        organizations=ids,
+        name="Get local bin edges",
+        description="Getting local bin edges from all nodes"
+    )
+
+    # Wait for node to return results of the subtask.
+    info("Waiting for results")
+    results = client.wait_for_results(task_id=task.get("id"))
+    info("Results obtained!")
+
+    # Combine bin edges from all nodes and deduplicate
+    bin_edges_list = [output['bin_edges'] for output in results]
+    combined_bin_edges = np.unique(np.concatenate(bin_edges_list))
+
+    if bin_type == "Quantile":
+        global_bin_edges = np.round((np.quantile(combined_bin_edges,
+                                                 np.linspace(0, 1, bin_size + 1))),
+                                    0).tolist()
+
+    elif bin_type == "Fixed":
+        # Calculate global min and max for re-binning
+        global_min = min(combined_bin_edges)
+        global_max = max(combined_bin_edges)
+
+        # Recalculate bin edges with a common set of bin edges
+        global_bin_edges = [round(edge, 0) for edge in (np.linspace(global_min, global_max, bin_size + 1)).tolist()]
+
+    else:
+        error("Unsupported bin type encountered. Exiting the algorithm.")
+        return {"error": "Unsupported bin type encountered. Exiting the algorithm."}
+
+    # Define input parameters for a subtask - get unique event times
+    info("Defining input parameters for subtask - get unique event times")
+    input_ = {
+        "method": "get_binned_unique_event_times",
+        "kwargs": {
+            "time_col": time_col,
+            "outcome_col": outcome_col,
+            'bin_edges': global_bin_edges,
+            'bin_type': bin_type
+        },
+    }
+
+    # Create a subtask for all organizations in the collaboration.
+    info("Creating subtask for all organizations in the collaboration")
+    task = client.task.create(
+        input_=input_,
+        organizations=ids,
+        name="Unique event times",
+        description="Getting event times and their counts based on global bin edges"
+    )
+
+    # Wait for node to return results of the subtask.
+    info("Waiting for results")
+    results = client.wait_for_results(task_id=task.get("id"))
+    info("Results obtained!")
+    return results
 
 
 def compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1):
