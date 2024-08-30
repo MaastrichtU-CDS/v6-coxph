@@ -11,14 +11,11 @@ import random
 import numpy as np
 import pandas as pd
 
-from scipy.stats import laplace, truncnorm
+from scipy.stats import laplace
 from vantage6.algorithm.tools.decorators import data
-from vantage6.algorithm.client import AlgorithmClient
 from vantage6.algorithm.tools.util import info, warn, error
-from vantage6.algorithm.tools.decorators import algorithm_client
 
 
-# Function to add Laplace noise for continuous data
 def add_noise(data, sensitivity, epsilon):
     """
     Adds Laplace noise to the data for differential privacy.
@@ -39,7 +36,6 @@ def add_noise(data, sensitivity, epsilon):
     return data + noise
 
 
-# Function to apply randomized response for boolean data
 def apply_randomized_response(data, epsilon):
     """
     Applies the randomized response technique to categorical data for differential privacy.
@@ -57,7 +53,6 @@ def apply_randomized_response(data, epsilon):
     return data.astype(int)
 
 
-# Function to check data type and apply appropriate privacy method
 def privatize_data(data, sensitivity, epsilon):
     """
     Applies differential privacy techniques to the provided data based on its type.
@@ -103,13 +98,11 @@ def privatize_data(data, sensitivity, epsilon):
 
 
 @data(1)
-@algorithm_client
-def get_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, time_col, outcome_col):
+def get_unique_event_times(df: pd.DataFrame, time_col, outcome_col):
     """
     Retrieves unique event times from the provided DataFrame, applying differential privacy if required.
 
     Parameters:
-    - client (AlgorithmClient): The client instance used to interact with the vantage6 server.
     - df (pd.DataFrame): The DataFrame containing the data.
     - time_col (str): The name of the column in the DataFrame that contains the time data.
     - outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
@@ -120,7 +113,6 @@ def get_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, time_col, 
     Note:
     - This function is only called if the 'binning' parameter is set to False in the central task.
     """
-
     info("Computing unique event times")
 
     times = df[df[outcome_col] == 1].groupby(time_col, as_index=False).count()
@@ -131,13 +123,11 @@ def get_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, time_col, 
 
 
 @data(1)
-@algorithm_client
-def get_sample_size(client: AlgorithmClient, df: pd.DataFrame):
+def get_sample_size(df: pd.DataFrame):
     """
     This function calculates the sample size of the provided DataFrame.
 
     Parameters:
-    client (AlgorithmClient): The client instance used to interact with the vantage6 server.
     df (pandas.DataFrame): The DataFrame containing the data.
     Returns:
     dict: A dictionary containing the sample size of the DataFrame.
@@ -149,14 +139,12 @@ def get_sample_size(client: AlgorithmClient, df: pd.DataFrame):
 
 
 @data(1)
-@algorithm_client
-def get_local_bin_edges(client: AlgorithmClient, df: pd.DataFrame, time_col, outcome_col,
-                        bin_size, bin_type, differential_privacy, sensitivity, epsilon):
+def get_local_bin_edges(df: pd.DataFrame, time_col, outcome_col, bin_size, bin_type,
+                        differential_privacy, sensitivity, epsilon):
     """
     Calculates the local bin edges for event times in the provided DataFrame, optionally applying differential privacy.
 
     Parameters:
-    - client (AlgorithmClient): The client instance used to interact with the vantage6 server.
     - df (pd.DataFrame): The DataFrame containing the data.
     - time_col (str): The name of the column in the DataFrame that contains the time data.
     - outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
@@ -200,14 +188,11 @@ def get_local_bin_edges(client: AlgorithmClient, df: pd.DataFrame, time_col, out
 
 
 @data(1)
-@algorithm_client
-def get_binned_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, time_col, outcome_col,
-                                  bin_edges, bin_type):
+def get_binned_unique_event_times(df: pd.DataFrame, time_col, outcome_col, bin_edges, bin_type):
     """
     Calculates the unique event times and their frequencies in the dataframe, placing them in specified bins.
 
     Parameters:
-    - client (AlgorithmClient): The client instance used to interact with the vantage6 server.
     - df (pd.DataFrame): The DataFrame containing the data.
     - time_col (str): The name of the column in the DataFrame that contains the time data.
     - outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
@@ -246,13 +231,11 @@ def get_binned_unique_event_times(client: AlgorithmClient, df: pd.DataFrame, tim
 
 
 @data(1)
-@algorithm_client
-def compute_summed_z(client: AlgorithmClient, df: pd.DataFrame, outcome_col, expl_vars):
+def compute_summed_z(df: pd.DataFrame, outcome_col, expl_vars):
     """
     This function computes the sum of the specified explanatory variables for the outcome events.
 
     Parameters:
-    client (AlgorithmClient): The client instance used to interact with the vantage6 server.
     df (pandas.DataFrame): The DataFrame containing the data.
     outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
     expl_vars (list): A list of explanatory variables to be used in the computation.
@@ -267,13 +250,11 @@ def compute_summed_z(client: AlgorithmClient, df: pd.DataFrame, outcome_col, exp
 
 
 @data(1)
-@algorithm_client
-def perform_iteration(client: AlgorithmClient, df: pd.DataFrame, time_col, expl_vars, beta,
-                      unique_time_events, differential_privacy, privacy_target, sensitivity, epsilon):
+def perform_iteration(df: pd.DataFrame, time_col, expl_vars, beta, unique_time_events,
+                      differential_privacy, privacy_target, sensitivity, epsilon):
     """
 
     Parameters:
-    - client (AlgorithmClient): The client instance used to interact with the vantage6 server.
     - df (pd.DataFrame): The DataFrame containing the data.
     - time_col (str): The name of the column in the DataFrame that contains the time data.
     - expl_vars (list): A list of explanatory variables to be used in the computation.
@@ -344,7 +325,7 @@ def perform_iteration(client: AlgorithmClient, df: pd.DataFrame, time_col, expl_
     # JSON-serialize the results
     agg2 = pd.DataFrame(agg2).to_dict()
     agg3 = [array for array in agg3]
-    # # if noise not added to the aggregates, convert numpy arrays to lists
+    # If noise not added to the aggregates, convert numpy arrays to lists
     if not differential_privacy or privacy_target != 'aggregates':
         agg3 = [array.tolist() for array in agg3]
 
