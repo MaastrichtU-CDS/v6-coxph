@@ -13,7 +13,9 @@ import pandas as pd
 
 from scipy.stats import laplace
 from vantage6.algorithm.tools.decorators import data
-from vantage6.algorithm.tools.util import info, error
+from vantage6.algorithm.tools.decorators import algorithm_client
+from vantage6.algorithm.tools.util import info, warn, error
+from vantage6.algorithm.client import AlgorithmClient
 
 
 def add_noise(data, sensitivity, epsilon):
@@ -99,6 +101,32 @@ def privatize_data(data, sensitivity, epsilon):
 
 
 @data(1)
+@algorithm_client
+def sample_size_thresholding(client: AlgorithmClient, df: pd.DataFrame, time_col: str, outcome_col: str):
+    """
+    Applies sample size thresholding to ensure that the number of samples is sufficient for further analysis.
+
+    Parameters:
+    - client (AlgorithmClient): The client instance used to interact with the vantage6 server.
+    - df (pd.DataFrame): The DataFrame containing the data.
+    - time_col (str): The name of the column in the DataFrame that contains the time data.
+    - outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
+
+    Returns:
+    - dict: A dictionary indicating whether the sample size threshold was met or not, along with the organization ID.
+    """
+    info("Applying sample size thresholding")
+
+    if df[outcome_col].notnull().sum() <= 10:
+        warn("Sub-task was not executed because the number of samples is too small (n <= 10)")
+        return {"N-Threshold not met": client.organization_id}
+    if df[time_col].notnull().sum() <= 10:
+        warn("Sub-task was not executed because the number of samples is too small (n <= 10)")
+        return {"N-Threshold not met": client.organization_id}
+    return {'N-Threshold met': client.organization_id}
+
+
+@data(1)
 def get_unique_event_times(df: pd.DataFrame, time_col, outcome_col):
     """
     Retrieves unique event times from the provided DataFrame, applying differential privacy if required.
@@ -133,10 +161,7 @@ def get_sample_size(df: pd.DataFrame):
     Returns:
     dict: A dictionary containing the sample size of the DataFrame.
     """
-    sample_size = len(df)
-    return {
-        "sample_size": sample_size
-    }
+    return {"sample_size": len(df)}
 
 
 @data(1)

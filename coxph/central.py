@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 from scipy.linalg import solve
-from vantage6.algorithm.tools.util import info, error
+from vantage6.algorithm.tools.util import info, warn, error
 from vantage6.algorithm.tools.decorators import algorithm_client
 from vantage6.algorithm.client import AlgorithmClient
 
@@ -49,10 +49,64 @@ def central(
     else:
         ids = organization_ids
 
-    info(f'sending task to organizations {ids}')
+    info(f'Sending task to organizations {ids}')
 
     n_covs = len(expl_vars)
     epochs = 10
+
+    # Create a list to store the IDs of organizations that do not meet privacy guards
+    excluded_ids = []
+
+    # Define input parameters for a subtask - sample size thresholding
+    info("Defining input parameters for subtask - sample size thresholding")
+    input_ = {
+        "method": "sample_size_thresholding",
+        "kwargs": {
+            "time_col": time_col,
+            "outcome_col": outcome_col
+        },
+    }
+
+    n_loops = 0
+    n_threshold_met = False
+    while not n_threshold_met:
+        # This list represents the organizations that will be excluded in the following loop
+        _excluded_ids = []
+        if n_loops > 2:
+            error("Sample size violations should be eliminated yet criteria are not met. Exiting")
+            raise ValueError("Sample size violations should be eliminated yet criteria are not. Exiting")
+
+        n_loops += 1
+        # Create a subtask for all selected organizations in the collaboration.
+        info("Creating subtask for all selected organizations in the collaboration")
+        task = client.task.create(
+            input_=input_,
+            organizations=ids,
+            name="Unique event times",
+            description="Getting unique event times and their counts"
+        )
+
+        # Wait for the node to return results of the subtask.
+        info("Waiting for results")
+        results = client.wait_for_results(task_id=task.get("id"))
+        info("Results obtained!")
+
+        for output in results:
+
+            # Exclude organizations that do not meet the N-threshold
+            if "N-Threshold not met" in output:
+                warn(f"Insufficient samples for organization {output['N-Threshold not met']}. "
+                     f"Excluding organization from analysis.")
+                ids.remove(output["N-Threshold not met"])
+                excluded_ids.append(output["N-Threshold not met"])
+                _excluded_ids.append(output["N-Threshold not met"])
+                continue
+
+        if len(_excluded_ids) == 0:
+            n_threshold_met = True
+        elif len(ids) == 0:
+            warn("No organizations meet the minimal sample size threshold, returning NaN.")
+            return {"excluded_organizations": excluded_ids, "coxph_result": np.nan}
 
     if binning:
         results = handle_binning(client, time_col=time_col, outcome_col=outcome_col, bin_type=bin_type,
@@ -215,12 +269,13 @@ def central(
                                                                        aggregated_time_events,
                                                                        unique_time_events, summed_agg1)
 
-        return {"cumulative_baseline_hazard": cumulative_hazard.to_dict(),
+        return {"included_organizations": ids, "excluded_organizations": excluded_ids,
+                "cumulative_baseline_hazard": cumulative_hazard.to_dict(),
                 "baseline_survival_function": survival_function.to_dict(),
                 "coxph_results": results.to_dict()
                 }
 
-    return {"coxph_results": results.to_dict()}
+    return {"included_organizations": ids, "excluded_organizations": excluded_ids, "coxph_results": results.to_dict()}
 
 
 @algorithm_client
