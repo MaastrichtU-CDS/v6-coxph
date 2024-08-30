@@ -5,17 +5,10 @@ Input arguments
 ---------------
 The input arguments for the central function consist of:
 
-- time_col (str): The name of the column in the DataFrame that contains the time data.
-- outcome_col (str): The name of the column in the DataFrame that contains the outcome data.
-- expl_vars (list): A list of explanatory variables to be used in the computation.
-- organization_ids (list): A list of organization IDs that participate in the collaboration.
-- sensitivity (float): The sensitivity of the Cox model coefficients for differential privacy.
-- epsilon (float): The desired epsilon value for differential privacy.
-- baseline_hf (bool): A boolean flag to include the cumulative baseline hazard function in the results.
-- binning (bool): A boolean flag to enable binning of event times for added privacy.
-- bin_type (str): The type of binning to use for event times ("Fixed" or "Quantile").
-- differential_privacy (bool): A boolean flag to enable differential privacy on the aggregates.
-- privacy_target (str): The target of the differential privacy ("predictors" or "aggregates").
+- time_col (string): The name of the column in the dataset that contains the time data.
+- outcome_col (string): The name of the column in the dataset that contains the outcome data.
+- expl_vars (list): A list of explanatory variables (i.e. predictors) to be used in the computation.
+- organization_ids (list): A list of organization IDs that participate in the collaboration and you wish to run the algorithm on.
 
 Python client example
 ---------------------
@@ -49,17 +42,10 @@ first, especially the part about the
     'method': 'central',
     'master': True,
     'kwargs': {
-            "time_col": "overall_survival_in_days",
-            "outcome_col": "event_overall_survival",
-            "expl_vars": ["clin_n_1", "index_tumour_location_oropharynx"],
-            "baseline_hf": True,
-            "binning": False,
-            "bin_type": "Quantile",
-            "differential_privacy": True,
-            "privacy_target": "predictors",
-            "sensitivity": 1,
-            "epsilon": 0.3,
-            "organization_ids": org_ids
+        'time_col': 'overall_survival_in_days',
+        'outcome_col': 'event_overall_survival',
+        'expl_vars': ['clin_n_1', 'index_tumour_location_oropharynx'],
+        'organization_ids': organization_ids,
     },
     'output_format': 'json'
   }
