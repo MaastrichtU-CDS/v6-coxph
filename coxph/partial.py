@@ -59,12 +59,32 @@ def apply_randomized_response(data, epsilon):
 
 # Function to check data type and apply appropriate privacy method
 def privatize_data(data, sensitivity, epsilon):
+    """
+    Applies differential privacy techniques to the provided data based on its type.
+
+    Parameters:
+    - data: The data to be privatized. Can be a pandas Series, DataFrame, list, int, or float.
+    - sensitivity (float): The sensitivity of the query/function, which measures how much the query result
+      changes when a single individual's data is added or removed from the dataset. It is a crucial parameter
+      in differential privacy that helps to determine the amount of noise to add.
+    - epsilon (float): The privacy budget, which controls the trade-off between privacy and accuracy. A smaller
+      epsilon value provides stronger privacy guarantees but makes the output noisier (and thus less accurate).
+
+    Returns:
+    - The privatized data, with the same type as the input data.
+
+    Raises:
+    - ValueError: If the data type is unsupported for privatization.
+    """
     if isinstance(data, (pd.Series, pd.DataFrame)):
+        # Apply randomized response if the data is boolean
         if data.dtype == bool:
             return apply_randomized_response(data, epsilon)
         else:
+            # Add Laplace noise if the data is continuous
             return add_noise(data, sensitivity, epsilon)
     elif isinstance(data, list):
+        # Convert list to numpy array and add noise
         data = np.array(data)
         noisy_data = add_noise(data, sensitivity, epsilon)
         # Convert numpy array back to list
@@ -75,8 +95,10 @@ def privatize_data(data, sensitivity, epsilon):
         if data in [0, 1]:
             return apply_randomized_response(pd.Series([data]), epsilon).iloc[0]
         else:
+            # Add noise if the value is continuous
             return add_noise(np.array([data]), sensitivity, epsilon)[0]
     else:
+        # Raise an error if the data type is unsupported
         raise ValueError("Unsupported data type for privatization")
 
 
