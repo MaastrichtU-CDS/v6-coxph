@@ -13,7 +13,7 @@ import pandas as pd
 
 from scipy.stats import laplace
 from vantage6.algorithm.tools.decorators import data
-from vantage6.algorithm.tools.util import info, warn, error
+from vantage6.algorithm.tools.util import info, error
 
 
 def add_noise(data, sensitivity, epsilon):
@@ -94,6 +94,7 @@ def privatize_data(data, sensitivity, epsilon):
             return add_noise(np.array([data]), sensitivity, epsilon)[0]
     else:
         # Raise an error if the data type is unsupported
+        error(f"Unsupported data type for privatization")
         raise ValueError("Unsupported data type for privatization")
 
 
@@ -171,6 +172,7 @@ def get_local_bin_edges(df: pd.DataFrame, time_col, outcome_col, bin_size, bin_t
     elif bin_type == 'Fixed':
         bin_edges = np.histogram_bin_edges(event_times, bins=bin_size)
     else:
+        error(f"Unsupported bin type")
         raise ValueError("Unsupported bin type")
 
     # Round bin edges to the nearest integer
@@ -283,7 +285,8 @@ def perform_iteration(df: pd.DataFrame, time_col, expl_vars, beta, unique_time_e
                     noisy_subset = noisy_subset.astype(bool)
                 df.loc[subset_indices, col] = noisy_subset
             else:
-                raise ValueError("privatize_data did not return a Series or DataFrame")
+                error(f"privatize_data did not return a pandas Series or DataFrame")
+                raise ValueError("privatize_data did not return a pandas Series or DataFrame")
 
     info("Computing aggregates for the derivation of the partial likelihood")
     # Deserialize beta values

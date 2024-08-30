@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 from scipy.linalg import solve
-from vantage6.algorithm.tools.util import info, warn, error
+from vantage6.algorithm.tools.util import info
 from vantage6.algorithm.tools.decorators import algorithm_client
 from vantage6.algorithm.client import AlgorithmClient
 
@@ -55,6 +55,7 @@ def central(
     epochs = 10
 
     if binning:
+        info("Binning is enabled. Proceeding with binning.")
 
         # Step 1: Get sample size from each node
         info("Getting sample sizes from all nodes")
@@ -62,7 +63,7 @@ def central(
             "method": "get_sample_size"
         }
 
-        # create a subtask for all organizations in the collaboration.
+        # Create a subtask for all organizations in the collaboration.
         info("Creating subtask for all organizations in the collaboration")
         task = client.task.create(
             input_=input_,
@@ -71,7 +72,7 @@ def central(
             description="Getting sample sizes from all nodes to calculate bin size using Sturges' rule"
         )
 
-        # wait for node to return results of the subtask.
+        # Wait for node to return results of the subtask.
         info("Waiting for results")
         results = client.wait_for_results(task_id=task.get("id"))
         info("Results obtained!")
@@ -94,7 +95,7 @@ def central(
             },
         }
 
-        # create a subtask for all organizations in the collaboration.
+        # Create a subtask for all organizations in the collaboration.
         info("Creating subtask for all organizations in the collaboration")
         task = client.task.create(
             input_=input_,
@@ -103,7 +104,7 @@ def central(
             description="Getting local bin edges from all nodes"
         )
 
-        # wait for node to return results of the subtask.
+        # Wait for node to return results of the subtask.
         info("Waiting for results")
         results = client.wait_for_results(task_id=task.get("id"))
         info("Results obtained!")
@@ -113,7 +114,9 @@ def central(
         combined_bin_edges = np.unique(np.concatenate(bin_edges_list))
 
         if bin_type == "Quantile":
-            global_bin_edges = np.round((np.quantile(combined_bin_edges, np.linspace(0, 1, bin_size + 1))), 0).tolist()
+            global_bin_edges = np.round((np.quantile(combined_bin_edges,
+                                                     np.linspace(0, 1, bin_size + 1))),
+                                        0).tolist()
 
         elif bin_type == "Fixed":
             # Calculate global min and max for re-binning
@@ -139,7 +142,7 @@ def central(
             },
         }
 
-        # create a subtask for all organizations in the collaboration.
+        # Create a subtask for all organizations in the collaboration.
         info("Creating subtask for all organizations in the collaboration")
         task = client.task.create(
             input_=input_,
@@ -148,7 +151,7 @@ def central(
             description="Getting event times and their counts based on global bin edges"
         )
 
-        # wait for node to return results of the subtask.
+        # Wait for node to return results of the subtask.
         info("Waiting for results")
         results = client.wait_for_results(task_id=task.get("id"))
         info("Results obtained!")
@@ -197,7 +200,7 @@ def central(
         }
     }
 
-    # create a subtask for all organizations in the collaboration.
+    # Create a subtask for all organizations in the collaboration.
     info("Creating subtask for all organizations in the collaboration")
     task = client.task.create(
         input_=input_,
@@ -206,7 +209,7 @@ def central(
         description="Computing the summed Z statistic"
     )
 
-    # wait for node to return results of the subtask.
+    # Wait for node to return results of the subtask.
     info("Waiting for results")
     results = client.wait_for_results(task_id=task.get("id"))
     info("Results obtained!")
@@ -241,7 +244,7 @@ def central(
         # De-serialise beta again
         beta = np.array(beta)
 
-        # create a subtask for all organizations in the collaboration.
+        # Create a subtask for all organizations in the collaboration.
         info("Creating subtask for all organizations in the collaboration")
         task = client.task.create(
             input_=input_,
@@ -250,7 +253,7 @@ def central(
             description="Iterating to find the optimal beta"
         )
 
-        # wait for node to return results of the subtask.
+        # Wait for node to return results of the subtask.
         info("Waiting for results")
         results = client.wait_for_results(task_id=task.get("id"))
         info("Results obtained!")
@@ -293,7 +296,8 @@ def central(
 
     # 95%CI = beta +- 1.96 * SE
     results = pd.DataFrame(
-        np.array([np.around(beta, 5), np.around(np.exp(beta), 5), np.around(np.array(SErrors), 5)]).T,
+        np.array([np.around(beta, 5), np.around(np.exp(beta), 5),
+                  np.around(np.array(SErrors), 5)]).T,
         columns=["Coef", "Exp(coef)", "SE"])
     results['Var'] = expl_vars
     results["lower_CI"] = np.around(np.exp(results["Coef"] - 1.96 * results["SE"]), 5)
@@ -304,7 +308,9 @@ def central(
 
     if baseline_hf:
         # Compute the cumulative baseline hazard and survival function
-        survival_function, cumulative_hazard = compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events, summed_agg1)
+        survival_function, cumulative_hazard = compute_baseline_hazard(time_col,
+                                                                       aggregated_time_events,
+                                                                       unique_time_events, summed_agg1)
 
         return {"cumulative_baseline_hazard": cumulative_hazard.to_dict(),
                 "baseline_survival_function": survival_function.to_dict(),
@@ -333,7 +339,8 @@ def compute_baseline_hazard(time_col, aggregated_time_events, unique_time_events
     cumulative_baseline_hazard = []
     for t in range(len(unique_time_events)):
         # Compute the hazard at each unique event time using the Breslow estimator
-        hazard = aggregated_time_events.loc[aggregated_time_events[time_col] == unique_time_events[t], 'freq'].values[0] / summed_agg1[t]
+        hazard = aggregated_time_events.loc[aggregated_time_events[time_col] ==
+                                            unique_time_events[t], 'freq'].values[0] / summed_agg1[t]
         baseline_hazard.append(hazard)
 
         # Compute the cumulative baseline hazard at each unique event time
@@ -363,6 +370,7 @@ def calculate_survival_function(cumulative_baseline_hazard_df):
 
     # Calculate the survival function using the formula S(t) = exp(-H(t))
     baseline_survival_function['survival'] = np.exp(-cumulative_baseline_hazard_df['hazard'])
+
     # Select only the necessary columns to return
     baseline_survival_function_df = baseline_survival_function[['time', 'survival']]
 
