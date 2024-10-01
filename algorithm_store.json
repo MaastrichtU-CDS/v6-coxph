@@ -3,11 +3,9 @@
   "code_url": "https://github.com/MaastrichtU-CDS/v6-coxph",
   "documentation_url": "https://github.com/MaastrichtU-CDS/v6-coxph/wiki",
   "vantage6_version": "4.3",
-  "reviews": "/api/review?algorithm_id=8",
   "partitioning": "horizontal",
   "description": "Time to event analysis through Cox proprotional hazards",
-  "image": "ghcr.io/maastrichtu-cds/v6-coxph:2.0.0",
-  "developer_id": 2,
+  "image": "ghcr.io/maastrichtu-cds/v6-coxph:2.1.0",
   "functions": [
     {
       "name": "central",
@@ -98,9 +96,9 @@
             "x": "time",
             "y": "hazard",
             "y_axis_min": 0,
-            "y_axis_max": 1
+            "y_axis_max": 1.2
           },
-          "description": "The cumulative baseline hazard at each unique event time"
+          "description": "The cumulative baseline hazard at each unique event time."
         },
         {
           "name": "Baseline Survival Function",
