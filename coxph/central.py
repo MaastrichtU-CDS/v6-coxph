@@ -261,7 +261,7 @@ def central(
     results["upper_CI"] = np.around(np.exp(results["Coef"] + 1.96 * results["SE"]), 5)
     results["Z"] = zvalues
     results["p-value"] = pvalues
-    results = results.set_index("Var")
+    results = results[['Var'] + [col for col in results.columns if col != 'Var']]
 
     if baseline_hf:
         # Compute the cumulative baseline hazard and survival function
@@ -270,8 +270,11 @@ def central(
                                                                        unique_time_events, summed_agg1)
 
         return {"included_organizations": ids, "excluded_organizations": excluded_ids,
-                "cumulative_baseline_hazard": cumulative_hazard.to_json(),
-                "baseline_survival_function": survival_function.to_json(),
+                # TODO remove this workaround as soon as .to_json() is supported for line plots
+                "cumulative_baseline_hazard": cumulative_hazard.to_dict(),
+                "baseline_survival_function": survival_function.to_dict(),
+                # "cumulative_baseline_hazard": cumulative_hazard.to_json(),
+                # "baseline_survival_function": survival_function.to_json(),
                 "coxph_results": results.to_json()
                 }
 
