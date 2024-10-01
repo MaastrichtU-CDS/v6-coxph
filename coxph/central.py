@@ -270,12 +270,12 @@ def central(
                                                                        unique_time_events, summed_agg1)
 
         return {"included_organizations": ids, "excluded_organizations": excluded_ids,
-                "cumulative_baseline_hazard": cumulative_hazard.to_dict(),
-                "baseline_survival_function": survival_function.to_dict(),
-                "coxph_results": results.to_dict()
+                "cumulative_baseline_hazard": cumulative_hazard.to_json(),
+                "baseline_survival_function": survival_function.to_json(),
+                "coxph_results": results.to_json()
                 }
 
-    return {"included_organizations": ids, "excluded_organizations": excluded_ids, "coxph_results": results.to_dict()}
+    return {"included_organizations": ids, "excluded_organizations": excluded_ids, "coxph_results": results.to_json()}
 
 
 @algorithm_client

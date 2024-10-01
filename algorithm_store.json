@@ -1,69 +1,118 @@
 {
-  "name": "coxph",
-  "image": "v6-coxph",
+  "name": "Cox Proportional Hazards",
+  "code_url": "https://github.com/MaastrichtU-CDS/v6-coxph",
+  "documentation_url": "https://github.com/MaastrichtU-CDS/v6-coxph/wiki",
   "vantage6_version": "4.3",
   "partitioning": "horizontal",
+  "description": "Time to event analysis through Cox proprotional hazards",
+  "image": "ghcr.io/maastrichtu-cds/v6-coxph:2.1.0",
   "functions": [
     {
       "name": "central",
-      "description": "Federated algorithm for baseline hazard curve in Vantage6 v4",
-      "type": "central",
-      "databases": [],
       "arguments": [
         {
           "name": "time_col",
-          "type": "",
-          "description": ""
+          "description": "The name of the variable that contains the time data.",
+          "type": "string"
         },
         {
           "name": "outcome_col",
-          "type": "",
-          "description": ""
+          "description": "The name of the variable that contains the event/outcome data.",
+          "type": "string"
         },
         {
-          "name": "expl_var",
-          "type": "",
-          "description": ""
+          "name": "expl_vars",
+          "description": "A list of explanatory variables to be used in the computation.",
+          "type": "string_list"
+        },
+        {
+          "name": "baseline_hf",
+          "description": "A flag to include the cumulative baseline hazard function in the results. Defaults to True.",
+          "type": "boolean"
+        },
+        {
+          "name": "binning",
+          "description": "A boolean flag to enable binning of event times for added privacy. Defaults to True.",
+          "type": "boolean"
+        },
+        {
+          "name": "bin_type",
+          "description": "The type of binning to use for event times (\"Fixed\" or \"Quantile\"). Defaults to \"Fixed\".",
+          "type": "string"
+        },
+        {
+          "name": "differential_privacy",
+          "description": "A boolean flag to enable differential privacy on the aggregates. Defaults to True",
+          "type": "boolean"
+        },
+        {
+          "name": "privacy_target",
+          "description": "The target of the differential privacy (\"predictors\" or \"aggregates\"). Defaults to \"predictors\".",
+          "type": "string"
+        },
+        {
+          "name": "sensitivity",
+          "description": "The sensitivity of the Cox model coefficients for differential privacy. ",
+          "type": "float"
+        },
+        {
+          "name": "epsilon",
+          "description": "The desired epsilon value for differential privacy.",
+          "type": "float"
         },
         {
           "name": "organization_ids",
-          "type": "",
-          "description": ""
-        }
-      ]
-    },
-    {
-      "name": "get_unique_event_times",
-      "description": "",
-      "type": "federated",
-      "databases": [
-        {
-          "name": "Database 1"
-        },
-        {
-          "name": "Database 2"
+          "description": " A list of organization IDs to run the analysis on.",
+          "type": "organization_list"
         }
       ],
-      "arguments": [
+      "type": "central",
+      "databases": [
         {
-          "name": "time_col",
-          "type": "",
-          "description": ""
+          "name": "Database",
+          "description": "Database to perform the time to event analysis on"
+        }
+      ],
+      "description": "Performs the main computation and coordination tasks.",
+      "ui_visualizations": [
+        {
+          "name": "CoxPH model",
+          "type": "table",
+          "schema": {
+            "location": [
+              "coxph_results"
+            ],
+            "columns": []
+          },
+          "description": "The main result of the CoxPH model."
         },
         {
-          "name": "outcome_col",
-          "type": "",
-          "description": ""
+          "name": "Cumulative Baseline Hazard",
+          "type": "line",
+          "schema": {
+            "location": [
+              "cumulative_baseline_hazard"
+            ],
+            "x": "time",
+            "y": "hazard",
+            "y_axis_min": 0,
+            "y_axis_max": 1.2
+          },
+          "description": "The cumulative baseline hazard at each unique event time."
         },
         {
-          "name": "expl_var",
-          "type": "",
-          "description": ""
-        },
-        {
-          "name": "organization_ids",
-          "type": "",
-          "description": ""
+          "name": "Baseline Survival Function",
+          "type": "line",
+          "schema": {
+            "location": [
+              "baseline_survival_function"
+            ],
+            "x": "time",
+            "y": "survival",
+            "y_axis_min": 0,
+            "y_axis_max": 1
+          },
+          "description": "Baseline survival curve at each unique event time."
         }
       ]
     }
