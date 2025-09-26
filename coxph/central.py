@@ -9,7 +9,7 @@ encryption if that is enabled).
 import math
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
+from scipy.stats import norm, chi2
 from scipy.linalg import solve
 from vantage6.algorithm.tools.util import info, warn, error
 from vantage6.algorithm.tools.decorators import algorithm_client
@@ -251,6 +251,52 @@ def central(
     zvalues = (np.exp(beta) - 1) / np.array(SErrors)
     pvalues = 2 * norm.cdf(-abs(zvalues))
 
+    # Calculate overall model significance using Wald test
+    # Reference: Andersen & Gill (1982) "Cox's regression model for counting processes"
+    degrees_of_freedom = len(beta)
+    wald_statistic = np.dot(beta, np.dot(-secondary_derivative, beta))
+    overall_p_value = chi2.sf(wald_statistic, degrees_of_freedom)
+
+    # Compute AIC for model comparison
+    # Reference: Cox (1972) "Regression models and life tables" - defines partial likelihood
+    try:
+        # Cox partial log-likelihood: L(β) = Σ[β'x_i - log(Σ_j exp(β'x_j))]
+        # First term: linear predictor contribution for all events
+        linear_part = np.dot(z_sum, beta)
+        
+        # Second term: log of risk set sums (denominator terms)
+        # final summed_agg1 contains the risk set denominators at the converged β values
+        risk_set_part = 0
+        if hasattr(summed_agg1, '__len__') and len(summed_agg1) > 0:
+            for i in range(len(aggregated_time_events)):
+                if i < len(summed_agg1) and summed_agg1[i] > 0:
+                    freq = aggregated_time_events.iloc[i]['freq']
+                    # Check for numerical issues before computing log
+                    if summed_agg1[i] <= 0:
+                        # Risk of negative or zero due to noise in DP setting
+                        warn(f"Risk set sum is non-positive at time index {i}: {summed_agg1[i]}")
+                        continue
+                    risk_set_part += freq * np.log(summed_agg1[i])
+        
+        log_likelihood = linear_part - risk_set_part
+        n_params = len(beta)  # degrees of freedom
+        
+        # Check for numerical issues in log-likelihood
+        if np.isnan(log_likelihood) or np.isinf(log_likelihood):
+            raise ValueError(f"Invalid log-likelihood: {log_likelihood}")
+        
+        # AIC = -2 * log-likelihood + 2 * k (Akaike, 1974)
+        aic = -2 * log_likelihood + 2 * n_params
+        
+    except (ValueError, IndexError, FloatingPointError) as e:
+        warn(f"Could not compute AIC due to numerical/data issue: {e}")
+        aic = np.nan
+        n_params = len(beta)
+    except Exception as e:
+        warn(f"Unexpected error computing AIC: {e}")
+        aic = np.nan
+        n_params = len(beta)
+
     # 95%CI = beta +- 1.96 * SE
     results = pd.DataFrame(
         np.array([np.around(beta, 5), np.around(np.exp(beta), 5),
@@ -263,22 +309,50 @@ def central(
     results["p-value"] = pvalues
     results = results[['Var'] + [col for col in results.columns if col != 'Var']]
 
+    # Collect warnings for perfect prediction
+    warnings = []
+    threshold = 10
+    for idx, row in results.iterrows():
+        coef = row["Coef"]
+        se = row["SE"]
+        if (
+            abs(coef) > threshold or np.isinf(coef) or np.isnan(coef) or
+            abs(se) > threshold or np.isinf(se) or np.isnan(se)
+        ):
+            msg = (
+                f"Warning: Covariate '{row['Var']}' may perfectly predict the event "
+                f"(coef={coef}, SE={se}). Results may be unreliable."
+            )
+            warn(msg)
+            warnings.append(msg)
+
     if baseline_hf:
         # Compute the cumulative baseline hazard and survival function
         survival_function, cumulative_hazard = compute_baseline_hazard(time_col,
                                                                        aggregated_time_events,
                                                                        unique_time_events, summed_agg1)
 
-        return {"included_organizations": ids, "excluded_organizations": excluded_ids,
-                # TODO remove this workaround as soon as .to_json() is supported for line plots
-                "cumulative_baseline_hazard": cumulative_hazard.to_dict(),
-                "baseline_survival_function": survival_function.to_dict(),
-                # "cumulative_baseline_hazard": cumulative_hazard.to_json(),
-                # "baseline_survival_function": survival_function.to_json(),
-                "coxph_results": results.to_json()
-                }
+        return {
+            "included_organizations": ids,
+            "excluded_organizations": excluded_ids,
+            "cumulative_baseline_hazard": cumulative_hazard.to_dict(),
+            "baseline_survival_function": survival_function.to_dict(),
+            "coxph_results": results.to_json(),
+            "overall_p_value": float(overall_p_value),
+            "aic": float(aic),
+            "degrees_of_freedom": int(n_params),
+            "warnings": warnings
+        }
 
-    return {"included_organizations": ids, "excluded_organizations": excluded_ids, "coxph_results": results.to_json()}
+    return {
+        "included_organizations": ids,
+        "excluded_organizations": excluded_ids,
+        "coxph_results": results.to_json(),
+        "overall_p_value": float(overall_p_value),
+        "aic": float(aic),
+        "degrees_of_freedom": int(n_params),
+        "warnings": warnings
+    }
 
 
 @algorithm_client
