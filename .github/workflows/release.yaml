@@ -30,7 +30,7 @@ jobs:
 
       - name: Set image name based on branch
         run: |
-          REPO_LOWER=$(echo ${{ github.repository }} | tr '[: upper:]' '[:lower:]')
+          REPO_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
           BRANCH_NAME=$(echo ${{ steps.get_branch.outputs.branch }} | sed 's/\//-/g')
           
           # Create image name with branch suffix
