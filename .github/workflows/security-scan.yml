@@ -118,28 +118,78 @@ jobs:
           ignore-unfixed: true
 
   report:
-    name: Open an issue on failure
+    name: File a private draft security advisory on failure
     needs: [lock-scan, bandit, trivy]
     if: ${{ failure() }}
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
+    # The built-in GITHUB_TOKEN cannot create repository security advisories:
+    # no GITHUB_TOKEN permission covers them (security-events is code
+    # scanning only). The job therefore gets no GITHUB_TOKEN permissions and
+    # mints a short-lived token from the organisation's GitHub App instead
+    # ("Repository security advisories: read and write"); the token is
+    # scoped to this repository and revoked when the job ends. The App's
+    # client ID is the SECURITY_ADVISORY_APP_CLIENT_ID variable and its
+    # private key the SECURITY_ADVISORY_APP_PRIVATE_KEY secret. The advisory
+    # is created as a private draft and stays one until a human deliberately
+    # publishes it — scan output must never become a public issue.
+    permissions: {}
     steps:
-      - name: Open or comment on the security-scan issue
+      - name: Check that the App credentials are configured
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          CLIENT_ID: ${{ vars.SECURITY_ADVISORY_APP_CLIENT_ID }}
+          PRIVATE_KEY: ${{ secrets.SECURITY_ADVISORY_APP_PRIVATE_KEY }}
         run: |
-          BODY="The weekly security scan failed for run ${{ github.run_id }}.
-          See: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          if [ -z "$CLIENT_ID" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::The SECURITY_ADVISORY_APP_CLIENT_ID variable or the SECURITY_ADVISORY_APP_PRIVATE_KEY secret is not set, so no draft advisory was filed."
+            exit 1
+          fi
+
+      - name: Mint a short-lived advisory token for this repository
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.SECURITY_ADVISORY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SECURITY_ADVISORY_APP_PRIVATE_KEY }}
+          permission-repository-advisories: write
+
+      - name: Create or update the draft security advisory
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOBS: "lock-scan=${{ needs.lock-scan.result }}, bandit=${{ needs.bandit.result }}, trivy=${{ needs.trivy.result }}"
+        run: |
+          SUMMARY="Weekly security scan failed"
+          RUN_LINE="- ${RUN_URL} (${JOBS})"
+          DESCRIPTION="The weekly security scan failed. Each failed run is listed
+          below; open a run for the scanner output.
 
           Policy: triage within one working week. Failures on HIGH/CRITICAL with
           a fix available require a lock/digest bump, rebuild, tests and a patch
           tag; the CVE goes into the CHANGELOG. Suppressions must be committed
-          with a justification and an expiry date."
-          ISSUE=$(gh issue list --label security-scan --state open --json number --jq '.[0].number')
-          if [ -z "$ISSUE" ]; then
-            gh issue create --title "Weekly security scan failed" --body "$BODY" --label security-scan
+          with a justification and an expiry date.
+
+          The affected product and the severity are placeholders the API
+          requires; set both during triage. This advisory is a private draft:
+          do not publish it before the finding is fixed and released, and never
+          mirror it into a public issue.
+
+          Failed runs:
+
+          ${RUN_LINE}"
+          # Re-use the open draft so repeated failures append to one advisory
+          # instead of piling up new ones.
+          GHSA=$(gh api "repos/${GH_REPO}/security-advisories?state=draft&per_page=100" \
+            | jq -r --arg summary "$SUMMARY" '[.[] | select(.summary == $summary)] | .[0].ghsa_id // empty')
+          if [ -n "$GHSA" ]; then
+            CURRENT=$(gh api "repos/${GH_REPO}/security-advisories/${GHSA}" --jq '.description')
+            jq -n --arg description "${CURRENT}"$'\n'"${RUN_LINE}" '{description: $description}' \
+              | gh api -X PATCH "repos/${GH_REPO}/security-advisories/${GHSA}" --input - --silent
           else
-            gh issue comment "$ISSUE" --body "$BODY"
+            # The API requires an affected product and a severity; both are
+            # placeholders that triage replaces.
+            jq -n --arg summary "$SUMMARY" --arg description "$DESCRIPTION" --arg name "$GH_REPO" \
+              '{summary: $summary, description: $description, severity: "high",
+                vulnerabilities: [{package: {ecosystem: "other", name: $name}}]}' \
+              | gh api -X POST "repos/${GH_REPO}/security-advisories" --input - --silent
           fi

@@ -315,9 +315,18 @@ deliberately runs glibc and unlocked to test the declared range.
     with a justification and an expiry date — currently the exact pins
     ``click``, ``cryptography`` and ``pyjwt`` imposed by
     ``vantage6-common``), Bandit and Trivy (HIGH/CRITICAL,
-    ``ignore-unfixed``) on the latest released image; failures open a
-    ``security-scan`` issue. Suppressions are never replaced by lowering a
-    severity threshold.
+    ``ignore-unfixed``) on the latest released image; failures file a
+    **private draft security advisory** (GHSA), never a public issue — the
+    advisory is published only once the finding is fixed and released. The
+    built-in ``GITHUB_TOKEN`` cannot create advisories, so the report job
+    runs with ``permissions: {}`` and mints a short-lived token, scoped to
+    the repository, from the organisation's GitHub App (*Repository
+    security advisories: read and write*) with
+    ``actions/create-github-app-token``. The App's client ID is the
+    ``SECURITY_ADVISORY_APP_CLIENT_ID`` variable and its private key the
+    ``SECURITY_ADVISORY_APP_PRIVATE_KEY`` secret; without them the job fails
+    with an error naming both. Suppressions are never replaced by lowering
+    a severity threshold.
   - ``publish-wiki.yml`` (on pushes to ``standard-coxph`` or ``main``, on
     tags and on manual dispatch) converts ``docs/`` with pandoc and mirrors
     it to the wiki. It publishes only the tip of the default branch, which
