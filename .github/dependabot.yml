@@ -1,0 +1,21 @@
+version: 2
+
+updates:
+  # Runtime dependency pins (requirements-lock.txt is generated; Dependabot
+  # proposes the bumps, regeneration with uv is part of the review)
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Base-image digest in the Dockerfile
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Pinned action SHAs in the workflows
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

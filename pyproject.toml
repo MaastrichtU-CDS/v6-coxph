@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "v6-cox-ph"
+version = "2.2.0"
+description = "Federated Cox Proportional Hazards algorithm for vantage6"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "vantage6-algorithm-tools>=4.14,<4.16",
+    "pandas>=2.2.0",
+    "numpy",
+    "scipy",
+    "pydantic>=2.0.0",
+    "pyjwt>=2.4,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "docker>=6.0.0",
+    "lifelines",
+]
+lint = ["flake8", "black", "mypy"]
+
+[tool.setuptools]
+packages = ["v6-cox-ph"]
+
+[tool.setuptools.package-data]
+"v6-cox-ph" = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-v", "--tb=short", "--strict-markers"]
+markers = [
+    "unit: Unit tests for algorithm functions",
+    "integration: Integration tests with Vantage6",
+    "slow: Tests that take a long time to run",
+    "vantage6: Tests that require Vantage6 infrastructure",
+    "docker: Tests that require Docker",
+]
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.mypy]
+ignore_missing_imports = true
+follow_imports = "silent"

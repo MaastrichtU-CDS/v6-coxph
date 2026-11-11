@@ -1,0 +1,4 @@
+# Additional configuration for vantage6 server
+api_path: /api
+uri: sqlite:///server.db
+allow_drop_all: true

@@ -1,19 +1,23 @@
-# basic python3 image as base
-FROM harbor2.vantage6.ai/infrastructure/algorithm-base
+ARG PYTHON_VERSION=3.12
 
-# This is a placeholder that should be overloaded by invoking
-# docker build with '--build-arg PKG_NAME=...'
-ARG PKG_NAME="coxph"
+FROM python:${PYTHON_VERSION}-alpine@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4 AS builder
 
-# install federated algorithm
-COPY . /app
-RUN pip install /app
+# git: only needed by forks with git+https dependencies; never reaches runtime
+RUN apk add --no-cache git
 
+WORKDIR /src
+COPY requirements-lock.txt pyproject.toml ./
+COPY v6-cox-ph ./v6-cox-ph
+RUN python -m venv /opt/venv \
+ && /opt/venv/bin/pip install --no-cache-dir -c requirements-lock.txt .
 
-# Set environment variable to make name of the package available within the
-# docker image.
-ENV PKG_NAME=${PKG_NAME}
+FROM python:${PYTHON_VERSION}-alpine@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4
 
-# Tell docker to execute `wrap_algorithm()` when the image is run. This function
-# will ensure that the algorithm method is called properly.
-CMD python -c "from vantage6.algorithm.tools.wrap import wrap_algorithm; wrap_algorithm()"
+ARG PKG_NAME="v6-cox-ph"
+ENV PKG_NAME=${PKG_NAME} \
+    PATH="/opt/venv/bin:${PATH}" \
+    PYTHONUNBUFFERED=1
+
+COPY --from=builder /opt/venv /opt/venv
+
+CMD ["python", "-c", "from vantage6.algorithm.tools.wrap import wrap_algorithm; wrap_algorithm()"]

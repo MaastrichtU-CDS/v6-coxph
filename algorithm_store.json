@@ -1,69 +1,113 @@
 {
   "name": "coxph",
-  "image": "v6-coxph",
-  "vantage6_version": "4.3",
+  "image": "ghcr.io/maastrichtu-cds/v6-coxph-standard-coxph",
+  "vantage6_version": "4.14",
   "partitioning": "horizontal",
   "functions": [
     {
       "name": "central",
-      "description": "Federated algorithm for baseline hazard curve in Vantage6 v4",
+      "description": "Federated Cox proportional hazards algorithm (Breslow ties) for Vantage6 v4",
       "type": "central",
       "databases": [],
       "arguments": [
         {
           "name": "time_col",
-          "type": "",
-          "description": ""
+          "type": "string",
+          "description": "Name of the column containing the time-to-event data."
         },
         {
           "name": "outcome_col",
-          "type": "",
-          "description": ""
+          "type": "string",
+          "description": "Name of the column containing the event indicator (1=event, 0=censored)."
         },
         {
-          "name": "expl_var",
-          "type": "",
-          "description": ""
+          "name": "expl_vars",
+          "type": "json",
+          "description": "List of explanatory variables to include in the model: plain column names, or single-entry mappings of a column name to a categorical spec (reference and categories) or a scored spec (scores, optional missing). A list of names stays valid."
         },
         {
           "name": "organization_ids",
-          "type": "",
-          "description": ""
+          "type": "list",
+          "description": "List of organisation IDs to include. If None, all organisations are used."
+        },
+        {
+          "name": "covariate_profiles",
+          "type": "json",
+          "description": "Optional covariate profiles for survival curves: a list of objects mapping explanatory variable names to values. Variables left out are taken at the pooled event-case mean (the baseline profile)."
         }
       ]
     },
     {
-      "name": "get_unique_event_times",
-      "description": "",
+      "name": "compute_summed_z",
+      "description": "Compute the sum of the explanatory variables over the event cases.",
       "type": "federated",
       "databases": [
         {
           "name": "Database 1"
-        },
-        {
-          "name": "Database 2"
         }
       ],
       "arguments": [
         {
           "name": "time_col",
-          "type": "",
-          "description": ""
+          "type": "string",
+          "description": "Name of the column containing the time data."
         },
         {
           "name": "outcome_col",
-          "type": "",
-          "description": ""
+          "type": "string",
+          "description": "Name of the column containing the outcome data."
         },
         {
-          "name": "expl_var",
-          "type": "",
-          "description": ""
+          "name": "expl_vars",
+          "type": "json",
+          "description": "List of explanatory variables to include in the model: plain column names, or single-entry mappings of a column name to a categorical spec (reference and categories) or a scored spec (scores, optional missing). A list of names stays valid."
+        }
+      ]
+    },
+    {
+      "name": "perform_iteration",
+      "description": "Compute the per-event-time risk-set aggregates for one Newton-Raphson iteration.",
+      "type": "federated",
+      "databases": [
+        {
+          "name": "Database 1"
+        }
+      ],
+      "arguments": [
+        {
+          "name": "time_col",
+          "type": "string",
+          "description": "Name of the column containing the time data."
         },
         {
-          "name": "organization_ids",
-          "type": "",
-          "description": ""
+          "name": "outcome_col",
+          "type": "string",
+          "description": "Name of the column containing the outcome data."
+        },
+        {
+          "name": "expl_vars",
+          "type": "json",
+          "description": "List of explanatory variables to include in the model: plain column names, or single-entry mappings of a column name to a categorical spec (reference and categories) or a scored spec (scores, optional missing). A list of names stays valid."
+        },
+        {
+          "name": "beta",
+          "type": "list",
+          "description": "Current coefficient vector (one entry per explanatory variable)."
+        },
+        {
+          "name": "centre",
+          "type": "list",
+          "description": "Pooled covariate means over the event cases (one entry per explanatory variable)."
+        },
+        {
+          "name": "scale",
+          "type": "list",
+          "description": "Pooled covariate standard deviations over the event cases (one entry per explanatory variable)."
+        },
+        {
+          "name": "unique_time_events",
+          "type": "list",
+          "description": "Sorted list of unique event times shared by the central function."
         }
       ]
     }

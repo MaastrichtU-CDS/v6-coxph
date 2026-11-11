@@ -1,0 +1,20 @@
+# Additional configuration for vantage6 nodes
+# Disable the risk-set jump guard (k=1) for integration exactness tests,
+# lower the sample-size threshold, and run the minimal privacy level: the
+# demo network splits every test CSV into thirds, so each node holds only
+# ~1/3 of the rows and events. The exactness checks use k=1, threshold 5 and
+# COXPH_PRIVACY_LEVEL=minimal so the tiny slices can be modelled exactly (the
+# standard level's min_time_event_count merges singleton event times and the
+# fit is approximate); the privacy properties with the default settings
+# (k=5, threshold 10) are verified separately in the unit suite, and the
+# fail-closed threshold behaviour is still exercised here through the
+# coxph_test_data_3 scenarios.
+algorithm_env:
+  COXPH_MIN_RISK_SET_CHANGE: 1
+  COXPH_PRIVACY_LEVEL: minimal
+  SAMPLE_SIZE_THRESHOLD: 5
+policies:
+  allowed_algorithms:
+    - ^hello-world$
+    - ^v6-cox-ph$
+  require_algorithm_pull: false

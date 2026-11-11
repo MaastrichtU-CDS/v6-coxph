@@ -1,0 +1,179 @@
+name: Publish the documentation to the wiki
+
+# Converts the reStructuredText documentation in docs/ to Markdown pages and
+# pushes them to the repository wiki. Only the tip of the default branch is
+# published: a push to it publishes the development documentation, a tag at
+# its tip publishes that release, and every page states which of the two it
+# shows. The job reads the default branch from the repository, so this file
+# works unchanged in a fork; the push trigger lists the default-branch names
+# in use (standard-coxph upstream, main in a fork).
+#
+# The wiki is generated: edits made in the web interface are overwritten and
+# pages without a source in docs/ are removed on the next run. The wiki must
+# exist before the first run (enable it and create one page in the web
+# interface).
+
+on:
+  push:
+    branches:
+      - standard-coxph
+      - main
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish-wiki:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push access to the wiki repository
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0  # all branches and tags, to resolve the version
+          persist-credentials: false
+
+      - name: Determine the documentation version
+        id: version
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          BANNER: ${{ runner.temp }}/banner.md
+        run: |
+          # Only the tip of the default branch is published. A tag elsewhere
+          # (a phase or project branch) leaves the wiki unchanged, and so does
+          # a push that a newer push has already overtaken.
+          TIP=$(git rev-parse "refs/remotes/origin/${DEFAULT_BRANCH}")
+          if [ "$(git rev-parse HEAD)" != "$TIP" ]; then
+            echo "::notice::${GITHUB_REF_NAME} is not the tip of the default branch ${DEFAULT_BRANCH}; the wiki is left unchanged."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Highest version tag of a list; a leading v is ignored when comparing.
+          highest_tag() { grep -E '^v?[0-9]' | sed -E 's/^v?(.*)$/\1 &/' | sort -V -r | head -n 1 | cut -d' ' -f2; }
+
+          SHA=$(git rev-parse HEAD)
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          COMMIT_DATE=$(git show -s --format=%cs HEAD)
+          # The same rule for a tag push and a branch push of a tagged commit,
+          # so the two runs of one release publish the same pages.
+          RELEASE=$(git tag --points-at HEAD | highest_tag)
+
+          if [ -n "$RELEASE" ]; then
+            PACKAGE_VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+            if [ "${RELEASE#v}" != "$PACKAGE_VERSION" ]; then
+              echo "::warning::Tag ${RELEASE} does not match the version in pyproject.toml (${PACKAGE_VERSION}), which the results report as algorithm_version."
+            fi
+            REPO_LOWER=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+            IMAGE="ghcr.io/${REPO_LOWER}-${DEFAULT_BRANCH//\//-}:${RELEASE}"
+            LABEL="Release ${RELEASE}"
+            echo "> **Release [${RELEASE}](${REPO_URL}/tree/${RELEASE})**: this documentation belongs to release \`${RELEASE}\` (commit [\`${SHORT_SHA}\`](${REPO_URL}/commit/${SHA}), ${COMMIT_DATE}); its image is \`${IMAGE}\`." > "$BANNER"
+          else
+            LATEST=$(git tag --merged HEAD | highest_tag)
+            if [ -n "$LATEST" ]; then
+              LABEL="Development version after ${LATEST}"
+              LATEST_TEXT="The latest release is **[${LATEST}](${REPO_URL}/tree/${LATEST})**."
+            else
+              LABEL="Development version"
+              LATEST_TEXT="There is no release yet."
+            fi
+            echo "> **Development version**: this documentation is \`${DEFAULT_BRANCH}\` at commit [\`${SHORT_SHA}\`](${REPO_URL}/commit/${SHA}) (${COMMIT_DATE}) and can describe changes that are not released yet. ${LATEST_TEXT}" > "$BANNER"
+          fi
+
+          echo "Publishing: ${LABEL} (${SHORT_SHA})"
+          {
+            echo "publish=true"
+            echo "label=${LABEL}"
+            echo "short_sha=${SHORT_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install pandoc
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q pandoc
+
+      - name: Convert the documentation to wiki pages
+        if: steps.version.outputs.publish == 'true'
+        env:
+          PAGES: ${{ runner.temp }}/wiki-pages
+          BANNER: ${{ runner.temp }}/banner.md
+          LABEL: ${{ steps.version.outputs.label }}
+        run: |
+          # A pandoc failure inside the pandoc | sed pipeline must fail the
+          # job, not publish pages that hold only the banner.
+          set -o pipefail
+          mkdir -p "$PAGES"
+          NAMES=()
+          for src in docs/coxph/*.rst; do
+            NAMES+=("$(basename "$src" .rst)")
+          done
+          PAGE_PATTERN=$(IFS='|'; echo "${NAMES[*]}")
+
+          # Every page opens with the version banner; inline references such
+          # as ``Privacy.rst`` become links to the wiki page.
+          convert() {
+            {
+              cat "$BANNER"
+              echo
+              pandoc --from rst --to gfm --wrap=none "$1" \
+                | sed -E "s#\`(docs/coxph/)?(${PAGE_PATTERN})\.rst\`#[\2](\2)#g"
+            } > "$PAGES/$2.md"
+          }
+
+          # docs/index.rst becomes Home; every docs/coxph page keeps its name.
+          convert docs/index.rst Home
+          for name in "${NAMES[@]}"; do
+            convert "docs/coxph/${name}.rst" "$name"
+          done
+
+          {
+            echo
+            echo "## Contents"
+            echo
+            for name in "${NAMES[@]}"; do echo "- [${name}](${name})"; done
+          } >> "$PAGES/Home.md"
+
+          {
+            echo "**${LABEL}**"
+            echo
+            echo "- [Home](Home)"
+            for name in "${NAMES[@]}"; do echo "- [${name}](${name})"; done
+          } > "$PAGES/_Sidebar.md"
+
+          ls -1 "$PAGES"
+
+      - name: Push the pages to the wiki
+        if: steps.version.outputs.publish == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAGES: ${{ runner.temp }}/wiki-pages
+          LABEL: ${{ steps.version.outputs.label }}
+          SHORT_SHA: ${{ steps.version.outputs.short_sha }}
+        run: |
+          WIKI="$RUNNER_TEMP/wiki"
+          if ! git clone --quiet "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" "$WIKI"; then
+            echo "::error::Cannot clone the wiki of ${GITHUB_REPOSITORY}. Enable the wiki (Settings > General > Features > Wikis) and create its first page in the web interface: the wiki repository exists only after that."
+            exit 1
+          fi
+
+          rsync -a --delete --exclude .git "$PAGES/" "$WIKI/"
+          cd "$WIKI"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "The wiki is already up to date."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet -m "Publish the documentation: ${LABEL} (${SHORT_SHA})"
+          git push --quiet

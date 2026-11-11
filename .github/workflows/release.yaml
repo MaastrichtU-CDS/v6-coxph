@@ -4,46 +4,89 @@ on:
   push:
     tags:
       - '*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (must exist in the repository)"
+        required: true
+        type: string
+      branch:
+        description: "Branch whose tip is the tagged commit; escape hatch when the tag is no longer a branch tip"
+        required: false
+        type: string
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
   build-and-push-image:
-    runs-on:  ubuntu-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages:  write
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history to determine branch
+          fetch-depth: 0  # Fetch all history to determine the branch
 
-      - name:  Determine branch name from tag
+      - name: Determine branch name from tag
         id: get_branch
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_BRANCH: ${{ inputs.branch }}
         run: |
-          # Get the branch that contains this tag
-          BRANCH=$(git branch -r --contains ${{ github.ref }} | grep -v HEAD | head -n 1 | sed 's/.*origin\///')
-          echo "Branch detected: $BRANCH"
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+
+          # Escape hatch: the branch was provided via workflow_dispatch.
+          if [ -n "$INPUT_BRANCH" ]; then
+            echo "Branch provided via workflow_dispatch input: $INPUT_BRANCH"
+            echo "branch=$INPUT_BRANCH" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Deterministic rule: the branch whose tip IS the tagged commit.
+          # A commit can be contained in several branches (forks, merges);
+          # only branches at that exact tip qualify.
+          TIP=$(git rev-parse "${TAG}^{commit}")
+          BRANCHES=$(git for-each-ref refs/remotes/origin \
+            --format='%(refname:lstrip=3) %(objectname)' \
+            | awk -v tip="$TIP" '$2 == tip { print $1 }' \
+            | grep -v '^HEAD$')
+          COUNT=$(printf '%s\n' "$BRANCHES" | grep -c . || true)
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No branch has tag ${TAG} at its tip. Re-run this workflow via workflow_dispatch and set the 'branch' input."
+            exit 1
+          fi
+          if [ "$COUNT" -gt 1 ]; then
+            echo "::error::Several branches have tag ${TAG} at their tip: ${BRANCHES}. Re-run this workflow via workflow_dispatch and set the 'branch' input."
+            exit 1
+          fi
+
+          echo "Branch detected: $BRANCHES"
+          echo "branch=$BRANCHES" >> "$GITHUB_OUTPUT"
 
       - name: Set image name based on branch
         run: |
           REPO_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
           BRANCH_NAME=$(echo ${{ steps.get_branch.outputs.branch }} | sed 's/\//-/g')
-          
+
           # Create image name with branch suffix
           echo "IMAGE_NAME=${REPO_LOWER}-${BRANCH_NAME}" >> $GITHUB_ENV
-          echo "IMAGE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
-          
-          echo "Building image:  ${REPO_LOWER}-${BRANCH_NAME}:${{ github.ref_name }}"
+          echo "IMAGE_TAG=$(if [ -n '${{ inputs.tag }}' ]; then echo '${{ inputs.tag }}'; else echo '${{ github.ref_name }}'; fi)" >> $GITHUB_ENV
+
+          echo "Building image: ${REPO_LOWER}-${BRANCH_NAME}:${IMAGE_TAG}"
 
       - name: Log in to the Container registry
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github. actor }}
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image

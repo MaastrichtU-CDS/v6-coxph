@@ -1,0 +1,51 @@
+# pip-audit vulnerability suppressions, one ``--ignore-vuln`` argument per
+# line. Read by .github/workflows/security-scan.yml (weekly lock scan).
+#
+# Policy: every entry carries a justification and an expiry date. Entries
+# are re-triaged at the latest by their expiry date, or earlier when the
+# pinning package moves.
+#
+# Justification (all current entries): the vulnerable package is pinned
+# EXACTLY by vantage6-common 4.15.2 (click==8.1.3, cryptography==46.0.7,
+# pyjwt==2.12.1). The lock cannot move them without leaving the supported
+# vantage6 range (4.14-4.15). Re-triage when vantage6-common lifts the pin
+# or at the expiry date, whichever comes first.
+#
+# Expiry: 2027-01-05 (three months). After that, remove the suppression and
+# force a decision.
+
+# click 8.1.3
+--ignore-vuln PYSEC-2026-2132
+
+# cryptography 46.0.7
+--ignore-vuln PYSEC-2026-3552
+--ignore-vuln PYSEC-2026-3553
+--ignore-vuln PYSEC-2026-3554
+--ignore-vuln GHSA-537c-gmf6-5ccf
+
+# pyjwt 2.12.1 (the parent-task guard decodes without signature
+# verification by design; the node has already verified the token)
+--ignore-vuln PYSEC-2026-175
+--ignore-vuln PYSEC-2026-176
+--ignore-vuln PYSEC-2026-177
+--ignore-vuln PYSEC-2026-178
+--ignore-vuln PYSEC-2026-179
+--ignore-vuln PYSEC-2026-4140
+--ignore-vuln PYSEC-2026-4141
+--ignore-vuln PYSEC-2026-4144
+--ignore-vuln PYSEC-2026-4145
+--ignore-vuln PYSEC-2026-4146
+--ignore-vuln PYSEC-2026-4147
+--ignore-vuln PYSEC-2026-4148
+--ignore-vuln PYSEC-2026-4149
+--ignore-vuln PYSEC-2026-4152
+--ignore-vuln PYSEC-2026-4183
+--ignore-vuln GHSA-x33g-cr3x-6449
+
+# GHSA-pxh4-856f-4h89 (HMACAlgorithm.from_jwk accepts an oct JWK with an
+# empty k, so an empty-key forged token verifies): the vulnerable path is
+# never exercised, because the parent-task guard decodes the container
+# token with signature verification disabled and never loads keys from
+# JWKs; and pyjwt==2.12.1 is pinned exactly by vantage6-common 4.15.2,
+# which the supported vantage6 4.14-4.15 range does not allow to move.
+--ignore-vuln GHSA-pxh4-856f-4h89
